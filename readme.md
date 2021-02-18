@@ -4,21 +4,21 @@
     
 ## 功能
 
-+ *通过数据源及excel文件导入mysql database进行建表(支持create)*
-+ *支持 PK UK 索引(单列)*
-+ *支持xls xlsx*
-+ *可跳过检查table schema*
++ 通过数据源及excel文件导入mysql database进行建表(支持create)
++ 支持 PK UK 索引(单列)
++ 支持xls xlsx*
++ 可跳过检查table schema
     
 
-## 使用
+## 使用准备
 
-### 数据源:  db.properties
+### 数据源:  db.properties (参考)
     datasource.url: jdbc:mysql://localhost:3306/excel2mysql?serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=UTF-8&useSSL=false
     datasource.username: root
     datasource.password: 123456
     datasource.driver-class-name: com.mysql.cj.jdbc.Driver
       
-### excel模板
+### excel模板 (参考)
 
 ---
    + [/src/test/resources/test.xls](https://github.com/joker-pper/excel2mysql/blob/master/src/test/resources/test.xls)
@@ -53,6 +53,9 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
 
 # 导入xls (指定table - user) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table user -check-table-schema false
+
+# 导入xls (指定多个table - user role) 不检查table schema
+java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table "user role" -check-table-schema false
 
 # 导入xls (排除table - user) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table user -exclude -check-table-schema false
