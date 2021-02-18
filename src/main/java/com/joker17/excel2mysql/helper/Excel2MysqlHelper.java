@@ -89,7 +89,7 @@ public class Excel2MysqlHelper {
             sb.append(String.format(" `%s` %s ", excel2MysqlModel.getColumnName(), excel2MysqlModel.getColumnType()));
 
             //值描述
-            if (Excel2MysqlHelper.isColumnNotNull(excel2MysqlModel.getColumnNotNull())) {
+            if (isColumnNotNull(excel2MysqlModel.getColumnNotNull())) {
                 //非空时
                 sb.append(" NOT NULL ");
 
@@ -110,7 +110,7 @@ public class Excel2MysqlHelper {
 
             //Extra
             if (!StringUtils.isEmpty(excel2MysqlModel.getColumnExtra())) {
-                sb.append(excel2MysqlModel.getColumnExtra().toUpperCase(Locale.ROOT)).append(" ");
+                sb.append(StringUtils.toUpperCase(excel2MysqlModel.getColumnExtra())).append(" ");
             }
 
             //Comment
@@ -122,12 +122,12 @@ public class Excel2MysqlHelper {
 
             //解析key
             if (!StringUtils.isEmpty(excel2MysqlModel.getColumnKeyType())) {
-                if (Excel2MysqlHelper.isPrimaryKey(excel2MysqlModel.getColumnKeyType())) {
+                if (isPrimaryKey(excel2MysqlModel.getColumnKeyType())) {
                     if (primaryKeys[0] != null) {
                         throw new IllegalArgumentException(String.format("%s has already exists primary key %s : cause by column %s", tableName, primaryKeys[0], excel2MysqlModel.getColumnName()));
                     }
                     primaryKeys[0] = excel2MysqlModel.getColumnName();
-                } else if (Excel2MysqlHelper.isUniqueKey(excel2MysqlModel.getColumnKeyType())) {
+                } else if (isUniqueKey(excel2MysqlModel.getColumnKeyType())) {
                     uniqueKeyList.add(excel2MysqlModel.getColumnName());
                 }
             }
@@ -159,10 +159,20 @@ public class Excel2MysqlHelper {
      * @return
      */
     public static boolean isColumnNotNull(String text) {
+
         if (text == null) {
             return false;
         }
-        if (text.contains("Y") || text.contains("y") || text.contains("T") || text.contains("t")
+
+        if (text.contains("Y") || text.contains("y")) {
+            return true;
+        }
+
+        if (text.contains("N") || text.contains("n")) {
+            return false;
+        }
+
+        if (text.contains("T") || text.contains("t")
                 || text.equals("1") || text.contains("是") || text.contains("真") || text.contains("对")) {
             return true;
         }
