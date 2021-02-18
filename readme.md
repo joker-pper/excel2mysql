@@ -6,7 +6,7 @@
 
 + 通过数据源及excel文件导入mysql database进行建表(支持create)
 + 支持 PK UK 索引(单列)
-+ 支持xls xlsx*
++ 支持xls xlsx
 + 可跳过检查table schema
     
 
@@ -54,11 +54,10 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
 # 导入xls (指定table - user) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table user -check-table-schema false
 
-# 导入xls (指定多个table - user role) 不检查table schema
+# 导入xls (指定多个table - user role, 即只导入user role) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table "user role" -check-table-schema false
 
 # 导入xls (排除table - user) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/test -excel-type xls -filter-table user -exclude -check-table-schema false
-
-``` 
+```
 
