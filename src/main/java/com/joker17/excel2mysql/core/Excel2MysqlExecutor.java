@@ -45,7 +45,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
 
         File inExcelFile = FileUtils.getInExcelFile(inFilePath, fileName, excelType);
         if (!FileUtils.isFileAndExists(inExcelFile)) {
-            throw new FileNotFoundException(String.format("in excel file %s not found", dataSourceProperties));
+            throw new FileNotFoundException(String.format("in excel file %s not found", inExcelFile.getPath()));
         }
 
         //获取筛选的table配置
