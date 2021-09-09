@@ -111,9 +111,9 @@ public class Excel2MysqlExecutorTest {
 
 
     @Test
-    public void executeXls() throws IOException {
+    public void executeCreateXls() throws IOException {
         String inFilePath = targetClassPath;
-        String fileName = "test";
+        String fileName = "create-excel";
         String excelType = Excel2MysqlConstants.XLS;
         String appendText = "-check-table-schema false";
 
@@ -123,12 +123,47 @@ public class Excel2MysqlExecutorTest {
         Excel2MysqlExecutor.INSTANCE.execute(args);
     }
 
+
     @Test
-    public void executeXlsx() throws IOException {
+    public void executeCreateXlsx() throws IOException {
         String inFilePath = targetClassPath;
-        String fileName = "test";
+        String fileName = "create-excel.xlsx";
         String excelType = Excel2MysqlConstants.XLSX;
         String appendText = "-check-table-schema false";
+
+        String line = String.format("-data-source %s -in-file-path %s -file-name %s -excel-type %s %s",
+                targetClassPath + "db.properties", inFilePath, fileName, excelType, appendText == null ? "" : appendText);
+        String[] args = line.split(" ");
+        Excel2MysqlExecutor.INSTANCE.execute(args);
+    }
+
+    @Test
+    public void executeUpdateXlsx() throws IOException {
+        String fileName = "update-excel.xlsx";
+        String revertFileName = "update-excel-revert.xlsx";
+        boolean hasError = false;
+        try {
+            executeUpdateXlsx(fileName);
+        } catch (Exception ex) {
+            logger.error("execute update update-excel has error: maybe updated, try to revert.");
+            hasError = true;
+            logger.info("execute update update-excel-revert start");
+            executeUpdateXlsx(revertFileName);
+            logger.info("execute update update-excel-revert end.");
+        } finally {
+            if (hasError) {
+                logger.error("execute update update-excel retry to execute start");
+                executeUpdateXlsx(fileName);
+                logger.error("execute update update-excel retry to execute end.");
+            }
+        }
+
+    }
+
+    private void executeUpdateXlsx(String fileName) throws IOException {
+        String inFilePath = targetClassPath;
+        String excelType = Excel2MysqlConstants.XLSX;
+        String appendText = "-check-table-schema false -auto-mode update";
 
         String line = String.format("-data-source %s -in-file-path %s -file-name %s -excel-type %s %s",
                 targetClassPath + "db.properties", inFilePath, fileName, excelType, appendText == null ? "" : appendText);

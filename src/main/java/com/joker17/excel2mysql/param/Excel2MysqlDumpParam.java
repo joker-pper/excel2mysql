@@ -36,11 +36,11 @@ public class Excel2MysqlDumpParam {
     private String filterTable;
 
     /**
-     * 是否为排除模式,默认false
-     * 通过命令行指定为true: -exclude
+     * 是否为排除table模式,默认false
+     * 通过命令行指定为true: -exclude-table
      */
-    @Parameter(names = "-exclude", description = "exclude table mode")
-    private boolean excludeMode;
+    @Parameter(names = "-exclude-table", description = "exclude table mode")
+    private boolean excludeTableMode;
 
     /**
      * 是否检查tableSchema,默认true
@@ -51,6 +51,12 @@ public class Excel2MysqlDumpParam {
      */
     @Parameter(names = "-check-table-schema", description = "check table schema, default value true", arity = 1)
     private boolean checkTableSchema = true;
+
+    /**
+     * 建表模式
+     */
+    @Parameter(names = {"-auto-mode"}, description = "auto mode, values: create / update, default value create")
+    private String autoMode;
 
     @Parameter(names = {"--help", "--h"}, help = true, order = 5)
     private boolean help;
@@ -95,12 +101,12 @@ public class Excel2MysqlDumpParam {
         this.filterTable = filterTable;
     }
 
-    public boolean isExcludeMode() {
-        return excludeMode;
+    public boolean isExcludeTableMode() {
+        return excludeTableMode;
     }
 
-    public void setExcludeMode(boolean excludeMode) {
-        this.excludeMode = excludeMode;
+    public void setExcludeTableMode(boolean excludeTableMode) {
+        this.excludeTableMode = excludeTableMode;
     }
 
     public boolean isCheckTableSchema() {
@@ -109,6 +115,14 @@ public class Excel2MysqlDumpParam {
 
     public void setCheckTableSchema(boolean checkTableSchema) {
         this.checkTableSchema = checkTableSchema;
+    }
+
+    public String getAutoMode() {
+        return autoMode;
+    }
+
+    public void setAutoMode(String autoMode) {
+        this.autoMode = autoMode;
     }
 
     public boolean isHelp() {

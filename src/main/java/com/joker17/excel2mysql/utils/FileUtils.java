@@ -50,8 +50,11 @@ public class FileUtils {
         }
 
         sb.append(fileName);
-        sb.append(".");
-        sb.append(excelType);
+
+        if (!fileName.contains(".")) {
+            sb.append(".");
+            sb.append(excelType);
+        }
 
         return new File(sb.toString());
     }

@@ -8,7 +8,7 @@ import java.util.*;
 public class MysqlUtils {
 
     /**
-     * 获取数据库名称
+     * 获取当前数据库名称
      *
      * @param jdbcTemplate
      * @return
@@ -57,6 +57,7 @@ public class MysqlUtils {
         String sql = String.format("DROP TABLE IF EXISTS `%s`", table);
         execute(jdbcTemplate, sql);
     }
+
 
     /**
      * execute sql
