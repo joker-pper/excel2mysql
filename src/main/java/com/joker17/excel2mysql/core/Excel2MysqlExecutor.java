@@ -72,7 +72,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         }
 
         //解析excel数据
-        List<Excel2MysqlModel> excel2MysqlModelList = EasyExcel.read(inExcelFile).head(Excel2MysqlModel.class).sheet().doReadSync();
+        List<Excel2MysqlModel> excel2MysqlModelList = EasyExcel.read(inExcelFile).excelType(Excel2MysqlHelper.getExcelTypeEnum(excelType))
+                .head(Excel2MysqlModel.class).sheet().doReadSync();
         if (excel2MysqlModelList == null || excel2MysqlModelList.isEmpty()) {
             MAIN_LOG.warn("read excel empty data list, return ...");
             return;

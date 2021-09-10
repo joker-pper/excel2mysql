@@ -145,7 +145,7 @@ public class Excel2MysqlHelper {
      * `name` varchar(64) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL,
      * `remarks` varchar(512) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL,
      * PRIMARY KEY (`id`)
-     * ) ENGINE=InnoDB AUTO_INCREMENT=328 DEFAULT CHARSET=utf8 COLLATE=utf8_bin
+     * ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COLLATE=utf8_bin
      * <p>
      *
      * @param tableName
@@ -216,56 +216,7 @@ public class Excel2MysqlHelper {
      * @return
      */
     public static String getColumnDefinition(String columnName, Excel2MysqlModel excel2MysqlModel) {
-        // 列名 + 类型 + 值描述 + Extra + Comment
-
-        //   `age` smallint(5) unsigned DEFAULT NULL COMMENT '年龄'
-        //   `age` smallint(5) unsigned DEFAULT '0' COMMENT '年龄'
-        //   `age` smallint(5) unsigned NOT NULL COMMENT '年龄'
-        //   `age` smallint(5) unsigned NOT NULL DEFAULT '0' COMMENT '年龄'
-
-        //   `create_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-        //   `update_date` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
-        //   `update_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-
-        StringBuilder sb = new StringBuilder();
-
-        //列名 + 类型
-        sb.append(String.format(" `%s` %s ", columnName, excel2MysqlModel.getColumnType()));
-
-        //值描述
-        if (MysqlBoostHelper.isColumnNotNull(excel2MysqlModel.getColumnNotNull())) {
-            //非空时
-            sb.append(" NOT NULL ");
-
-            if (!StringUtils.isEmpty(excel2MysqlModel.getColumnDefaultValue())) {
-                sb.append(" DEFAULT ").append(excel2MysqlModel.getColumnDefaultValue())
-                        .append(" ");
-
-            }
-        } else {
-            if (!StringUtils.isEmpty(excel2MysqlModel.getColumnDefaultValue())) {
-                sb.append(" DEFAULT ").append(excel2MysqlModel.getColumnDefaultValue())
-                        .append(" ");
-
-            } else {
-                sb.append(" DEFAULT NULL ");
-            }
-        }
-
-        //Extra
-        if (!StringUtils.isEmpty(excel2MysqlModel.getColumnExtra())) {
-            String filteredColumnExtra = MysqlBoostHelper.getFilteredColumnExtra(excel2MysqlModel.getColumnExtra());
-            if (!StringUtils.isEmpty(filteredColumnExtra)) {
-                sb.append(filteredColumnExtra).append(" ");
-            }
-        }
-
-        //Comment
-        if (!StringUtils.isEmpty(excel2MysqlModel.getColumnComment())) {
-            sb.append(String.format(" COMMENT '%s'", excel2MysqlModel.getColumnComment()));
-        }
-
-        return sb.toString();
+        return getColumnDefinition(columnName, excel2MysqlModel.getColumnType(), excel2MysqlModel.getColumnNotNull(), excel2MysqlModel.getColumnDefaultValue(), excel2MysqlModel.getColumnExtra(), excel2MysqlModel.getColumnComment());
     }
 
     /**
@@ -276,92 +227,92 @@ public class Excel2MysqlHelper {
      * @return
      */
     public static String getColumnDefinition(String columnName, MysqlColumnModel mysqlColumnModel) {
+        return getColumnDefinition(columnName, mysqlColumnModel.getColumnType(), mysqlColumnModel.getColumnNotNull(), mysqlColumnModel.getColumnDefaultValue(), mysqlColumnModel.getColumnExtra(), mysqlColumnModel.getColumnComment());
+    }
+
+    /**
+     * 获取column字段定义内容
+     *
+     * @param columnName         列名字段
+     * @param columnType         列类型
+     *                           e.g:
+     *                           smallint(5) unsigned
+     *                           bigint(20)
+     *                           datetime
+     * @param columnNotNull      列是否不为空
+     * @param columnDefaultValue 列默认值
+     * @param columnExtra        columnExtra,
+     *                           e.g:
+     *                           auto_increment
+     *                           AUTO_INCREMENT
+     *                           on update CURRENT_TIMESTAMP
+     *                           ON UPDATE CURRENT_TIMESTAMP
+     * @param columnComment      列备注,可选
+     * @return
+     */
+    public static String getColumnDefinition(String columnName, String columnType, String columnNotNull, String columnDefaultValue, String columnExtra, String columnComment) {
         // 列名 + 类型 + 值描述 + Extra + Comment
 
+        //   `id` bigint(20) NOT NULL AUTO_INCREMENT
+
+        //   `age` smallint(5) DEFAULT NULL
         //   `age` smallint(5) unsigned DEFAULT NULL COMMENT '年龄'
         //   `age` smallint(5) unsigned DEFAULT '0' COMMENT '年龄'
         //   `age` smallint(5) unsigned NOT NULL COMMENT '年龄'
         //   `age` smallint(5) unsigned NOT NULL DEFAULT '0' COMMENT '年龄'
 
-        //   `create_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+        //   `create_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+        //   `update_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+        //   `update_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+
         //   `update_date` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
-        //   `update_date` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
 
         StringBuilder sb = new StringBuilder();
 
         //列名 + 类型
-        sb.append(String.format(" `%s` %s ", columnName, mysqlColumnModel.getColumnType()));
+        sb.append(String.format("`%s` %s", columnName, columnType));
 
         //值描述
-        if (MysqlBoostHelper.isColumnNotNull(mysqlColumnModel.getColumnNotNull())) {
+        if (MysqlBoostHelper.isColumnNotNull(columnNotNull)) {
             //非空时
-            sb.append(" NOT NULL ");
+            sb.append(" NOT NULL");
 
-            if (!StringUtils.isEmpty(mysqlColumnModel.getColumnDefaultValue())) {
-                sb.append(" DEFAULT ").append(mysqlColumnModel.getColumnDefaultValue())
-                        .append(" ");
-
+            if (!StringUtils.isEmpty(columnDefaultValue)) {
+                sb.append(String.format(" DEFAULT %s", MysqlBoostHelper.getResolvedColumnDefaultValue(columnType, columnDefaultValue)));
             }
         } else {
-            if (!StringUtils.isEmpty(mysqlColumnModel.getColumnDefaultValue())) {
-                sb.append(" DEFAULT ").append(mysqlColumnModel.getColumnDefaultValue())
-                        .append(" ");
-
+            if (!StringUtils.isEmpty(columnDefaultValue)) {
+                sb.append(String.format(" DEFAULT %s", MysqlBoostHelper.getResolvedColumnDefaultValue(columnType, columnDefaultValue)));
             } else {
-                sb.append(" DEFAULT NULL ");
+                sb.append(" DEFAULT NULL");
             }
         }
 
         //Extra
-        if (!StringUtils.isEmpty(mysqlColumnModel.getColumnExtra())) {
-            String filteredColumnExtra = MysqlBoostHelper.getFilteredColumnExtra(mysqlColumnModel.getColumnExtra());
+        if (!StringUtils.isEmpty(columnExtra)) {
+            String filteredColumnExtra = MysqlBoostHelper.getFilteredColumnExtra(columnExtra);
             if (!StringUtils.isEmpty(filteredColumnExtra)) {
-                sb.append(filteredColumnExtra).append(" ");
+                sb.append(" ").append(filteredColumnExtra);
             }
         }
 
         //Comment
-        if (!StringUtils.isEmpty(mysqlColumnModel.getColumnComment())) {
-            sb.append(String.format(" COMMENT '%s'", mysqlColumnModel.getColumnComment()));
+        if (!StringUtils.isEmpty(columnComment)) {
+            sb.append(String.format(" COMMENT '%s'", columnComment));
         }
 
         return sb.toString();
     }
 
-
     /**
-     * 获取表新增的column sql
+     * 获取表要添加pk的sql
      *
      * @param tableName
-     * @param columnDefinition
+     * @param columnNameList
      * @return
      */
-    public static String getTableAddColumnNameSql(String tableName, String columnDefinition) {
-        return String.format("ALTER TABLE %s ADD COLUMN %s;", tableName, columnDefinition);
-    }
-
-    /**
-     * 获取表修改的column sql
-     *
-     * @param tableName
-     * @param columnDefinition
-     * @return
-     */
-    public static String getTableModifyColumnNameSql(String tableName, String columnDefinition) {
-        return String.format("ALTER TABLE `%s` MODIFY COLUMN %s;", tableName, columnDefinition);
-    }
-
-
-    /**
-     * 获取表更新的column sql
-     *
-     * @param tableName
-     * @param beforeColumnName
-     * @param columnDefinition
-     * @return
-     */
-    public static String getTableChangeColumnNameSql(String tableName, String beforeColumnName, String columnDefinition) {
-        return String.format("ALTER TABLE `%s` CHANGE COLUMN `%s` %s;", tableName, beforeColumnName, columnDefinition);
+    public static String getTableAddPrimaryKeyIndexSql(String tableName, List<String> columnNameList) {
+        return String.format("ALTER TABLE `%s` ADD PRIMARY KEY(%s);", tableName, MysqlBoostHelper.getColumnFields(columnNameList));
     }
 
     /**
@@ -386,14 +337,37 @@ public class Excel2MysqlHelper {
     }
 
     /**
-     * 获取表要添加pk的sql
+     * 获取表新增的column sql
      *
      * @param tableName
-     * @param columnNameList
+     * @param columnDefinition
      * @return
      */
-    public static String getTableAddPrimaryKeyIndexSql(String tableName, List<String> columnNameList) {
-        return String.format("ALTER TABLE `%s` ADD PRIMARY KEY(%s);", tableName, MysqlBoostHelper.getColumnFields(columnNameList));
+    public static String getTableAddColumnNameSql(String tableName, String columnDefinition) {
+        return String.format("ALTER TABLE `%s` ADD COLUMN %s;", tableName, columnDefinition);
+    }
+
+    /**
+     * 获取表修改的column sql
+     *
+     * @param tableName
+     * @param columnDefinition
+     * @return
+     */
+    public static String getTableModifyColumnNameSql(String tableName, String columnDefinition) {
+        return String.format("ALTER TABLE `%s` MODIFY COLUMN %s;", tableName, columnDefinition);
+    }
+
+    /**
+     * 获取表更新的column sql
+     *
+     * @param tableName
+     * @param beforeColumnName
+     * @param columnDefinition
+     * @return
+     */
+    public static String getTableChangeColumnNameSql(String tableName, String beforeColumnName, String columnDefinition) {
+        return String.format("ALTER TABLE `%s` CHANGE COLUMN `%s` %s;", tableName, beforeColumnName, columnDefinition);
     }
 
     /**
@@ -407,12 +381,15 @@ public class Excel2MysqlHelper {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("ALTER TABLE `%s`", tableName));
         int size = columnNames.size();
+        sb.append(" ");
         for (int i = 0; i < size; i++) {
-            sb.append(String.format(" drop `%s` ", columnNames.get(i)));
+            sb.append(String.format("DROP `%s`", columnNames.get(i)));
             if (i != size - 1) {
-                sb.append(",");
+                sb.append(", ");
             }
         }
+        sb.append(";");
+
         return sb.toString();
     }
 

@@ -5,7 +5,8 @@
 ## 功能
 
 + 通过数据源及excel文件导入mysql database进行生成、更新表(支持create/update)
-+ 支持 PK UK 索引(单列)
++ 创建表支持PK(包含复合主键)、UK索引(单列)
++ 更新表支持PK(包含复合主键)、增加UK索引(单列)
 + 支持xls xlsx
 + 可跳过检查table schema
 + 支持过滤table
@@ -67,7 +68,7 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
 
 ```
 
-## 命令参数
+### 命令参数
 
 ```
     --help, --h
@@ -96,14 +97,26 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
       in excel file name
     
     -filter-table
-      optional, more should be separated by a space
+      filter table config, multiple values should be separated by space
 
 
 ```
 
-### 更新表的列映射关系
+### 其他
 
 ```
+
+### COLUMN EXTRA ###
+
+auto_increment  自增
+on update CURRENT_TIMESTAMP 根据当前时间戳更新
+
+### COLUMN KEY TYPE ###
+
+PK 主键
+UK 唯一键
+
+### 更新excel表中的列映射关系 ###
 
 remarks->(-)              表示列被移除
 remarks->-                表示列被移除,支持但不推荐,使用(-)更容易区分

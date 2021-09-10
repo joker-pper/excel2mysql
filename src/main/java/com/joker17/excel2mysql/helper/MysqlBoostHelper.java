@@ -34,20 +34,36 @@ public class MysqlBoostHelper {
      * @return
      */
     public static boolean isColumnNotNull(String text) {
+        text = StringUtils.trimToNull(text);
         if (text == null) {
             return false;
         }
 
-        if (text.contains("Y") || text.contains("y")) {
+        if (text.equals("Y") || text.equals("y") || text.equalsIgnoreCase("Yes")) {
             return true;
         }
 
-        if (text.contains("N") || text.contains("n")) {
+        if (text.equals("N") || text.equals("n") || text.equalsIgnoreCase("No")) {
             return false;
         }
 
-        if (text.contains("T") || text.contains("t")
-                || text.equals("1") || text.contains("是") || text.contains("真") || text.contains("对")) {
+        if (text.equals("T") || text.equals("t") || text.equalsIgnoreCase("True")) {
+            return true;
+        }
+
+        if (text.equals("F") || text.equals("f") || text.equalsIgnoreCase("False")) {
+            return false;
+        }
+
+        if (text.equals("1")) {
+            return true;
+        }
+
+        if (text.equals("0")) {
+            return false;
+        }
+
+        if (text.contains("是") || text.contains("真") || text.contains("对")) {
             return true;
         }
 
@@ -56,13 +72,14 @@ public class MysqlBoostHelper {
 
 
     /**
-     * 获取列是否不为空
+     * 获取列是否不为空结果
      *
      * @param nullText
      * @return
      */
     public static String getConvertColumnNotNull(String nullText) {
         if (nullText == null || nullText.contains("Y") || nullText.contains("y")) {
+            //当null text包含y时为 Null
             return "N";
         }
         return "Y";
@@ -201,6 +218,50 @@ public class MysqlBoostHelper {
         return String.format("uk_%s", uniqueKey);
     }
 
+    /**
+     * 获取处理过的列默认值
+     *
+     * @param columnType
+     * @param columnDefaultValue
+     * @return
+     */
+    public static String getResolvedColumnDefaultValue(final String columnType, final String columnDefaultValue) {
+        if (columnDefaultValue == null) {
+            return null;
+        }
+
+        if (columnDefaultValue.contains("(") || columnDefaultValue.contains("_")
+                || columnDefaultValue.contains("'")  || columnDefaultValue.contains("\"")
+                || columnDefaultValue.contains("+") || columnDefaultValue.contains("*")
+                || columnDefaultValue.contains(",") || columnDefaultValue.contains("-")
+        ) {
+
+            //  a DATETIME    DEFAULT (CURRENT_TIMESTAMP + INTERVAL 1 YEAR),
+            //  f FLOAT       DEFAULT (RAND() * RAND()),
+            //  b BINARY(16)  DEFAULT (UUID_TO_BIN(UUID())),
+            //  d DATE        DEFAULT (CURRENT_DATE + INTERVAL 1 YEAR),
+            //  c DATE        DEFAULT (CURRENT_DATE - INTERVAL 1 YEAR),
+            //  p POINT       DEFAULT (Point(0,0)),
+            //  j JSON        DEFAULT (JSON_ARRAY())
+            return columnDefaultValue;
+        }
+
+        String columnDefaultValueUpperCase = StringUtils.toUpperCase(columnDefaultValue);
+        if (columnDefaultValueUpperCase.contains("CURRENT")) {
+            // CURRENT_TIMESTAMP CURRENT_DATE
+            return columnDefaultValue;
+        }
+
+        String columnTypeLowerCase = StringUtils.toLowerCase(columnType);
+        if (columnTypeLowerCase.contains("int") || columnTypeLowerCase.equals("char")
+                || columnTypeLowerCase.equals("decimal") || columnTypeLowerCase.equals("double")
+                || columnTypeLowerCase.equals("float") || columnTypeLowerCase.equals("varchar")
+        ) {
+            return String.format("'%s'", columnDefaultValue);
+        }
+
+        return columnDefaultValue;
+    }
 
     /**
      * 美化sql

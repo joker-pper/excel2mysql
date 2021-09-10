@@ -28,11 +28,10 @@ public class Excel2MysqlDumpParam {
     @Parameter(names = {"-excel-type"},  description = "excel type, values: xls / xlsx, default value xls")
     private String excelType;
 
-
     /**
      * 要筛选的table 以空格分隔 可为空(全部)
      */
-    @Parameter(names = "-filter-table", description = "optional, more should be separated by a space")
+    @Parameter(names = "-filter-table", description = "filter table config, multiple values should be separated by space")
     private String filterTable;
 
     /**
