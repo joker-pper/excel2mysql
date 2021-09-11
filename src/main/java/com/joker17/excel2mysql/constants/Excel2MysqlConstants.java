@@ -11,6 +11,7 @@ public class Excel2MysqlConstants {
 
     public final static String XLSX = "xlsx";
 
+    public final static String INNODB_ENGINE = "InnoDB";
 
     public final static String LEFT_BRACKET_TAG = "(";
 

@@ -71,6 +71,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             throw new IllegalArgumentException("invalid auto mode");
         }
 
+        String engine = StringUtils.defaultIfEmpty(StringUtils.trimToNull(dumpParam.getEngine()), Excel2MysqlConstants.INNODB_ENGINE);
+
         //解析excel数据
         List<Excel2MysqlModel> excel2MysqlModelList = EasyExcel.read(inExcelFile).excelType(Excel2MysqlHelper.getExcelTypeEnum(excelType))
                 .head(Excel2MysqlModel.class).sheet().doReadSync();
@@ -125,10 +127,10 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                 boolean exists = existsTableNameList.contains(tableName);
                 switch (autoModeEnum) {
                     case CREATE:
-                        createAutoMode(jdbcTemplate, database, tableName, exists, tableExcel2MysqlModelList);
+                        createAutoMode(jdbcTemplate, database, tableName, engine, exists, tableExcel2MysqlModelList);
                         break;
                     case UPDATE:
-                        updateAutoMode(jdbcTemplate, database, tableName, exists, tableExcel2MysqlModelList);
+                        updateAutoMode(jdbcTemplate, database, tableName, engine, exists, tableExcel2MysqlModelList);
                         break;
                     default:
                         throw new RuntimeException("not support auto mode: " + autoModeEnum.getName());
@@ -144,25 +146,26 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
      * @param jdbcTemplate
      * @param database
      * @param tableName
+     * @param engine
      * @param exists
      * @param tableExcel2MysqlModelList
      */
-    private void createAutoMode(JdbcTemplate jdbcTemplate, String database, String tableName, boolean exists,
+    private void createAutoMode(JdbcTemplate jdbcTemplate, String database, String tableName, String engine, boolean exists,
                                 List<Excel2MysqlModel> tableExcel2MysqlModelList) {
         if (!exists) {
             //不存在表时获取创表sql
-            String createSql = Excel2MysqlHelper.getCreateSql(tableName, tableExcel2MysqlModelList);
+            String createSql = Excel2MysqlHelper.getCreateSql(tableName, engine, tableExcel2MysqlModelList);
 
-            MAIN_LOG.info("database {} create table {} start", database, tableName);
-            MAIN_LOG.info("database {} create table {} sql - {}", database, tableName, createSql);
+            MAIN_LOG.info("database {} create table `{}` start", database, tableName);
+            MAIN_LOG.info("database {} create table `{}` sql - {}", database, tableName, createSql);
 
             //执行sql
             MysqlUtils.execute(jdbcTemplate, createSql);
 
-            MAIN_LOG.info("database {} create table {} end", database, tableName);
+            MAIN_LOG.info("database {} create table `{}` end", database, tableName);
 
         } else {
-            MAIN_LOG.warn("database {} has already exist table {} ...", database, tableName);
+            MAIN_LOG.warn("database {} has already exist table `{}` ...", database, tableName);
         }
     }
 
@@ -174,26 +177,28 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
      * @param jdbcTemplate
      * @param database
      * @param tableName
+     * @param engine
      * @param exists
      * @param tableExcel2MysqlModelList
      */
-    private void updateAutoMode(JdbcTemplate jdbcTemplate, String database, String tableName, boolean exists,
+    private void updateAutoMode(JdbcTemplate jdbcTemplate, String database, String tableName, String engine, boolean exists,
                                 List<Excel2MysqlModel> tableExcel2MysqlModelList) {
         if (!exists) {
             //不存在表时获取创表sql
-            String createSql = Excel2MysqlHelper.getCreateSql(tableName, tableExcel2MysqlModelList);
+            String createSql = Excel2MysqlHelper.getCreateSql(tableName, engine, tableExcel2MysqlModelList);
 
-            MAIN_LOG.info("database {} create table {} start", database, tableName);
-            MAIN_LOG.info("database {} create table {} sql - {}", database, tableName, createSql);
+            MAIN_LOG.info("database {} create table `{}` start", database, tableName);
+            MAIN_LOG.info("database {} create table `{}` sql - {}", database, tableName, createSql);
 
             //执行sql
             MysqlUtils.execute(jdbcTemplate, createSql);
-            MAIN_LOG.info("database {} create table {} end", database, tableName);
+            MAIN_LOG.info("database {} create table `{}` end", database, tableName);
         } else {
             //获取当前表的列信息
             List<MysqlColumnModel> mysqlColumnModelList = Excel2MysqlHelper.getMysqlColumnModelList(jdbcTemplate, database, tableName);
 
-            Map<String, MysqlColumnModel> columnName2MysqlColumnModelMap = mysqlColumnModelList.stream().collect(Collectors.toMap(MysqlColumnModel::getColumnName, Function.identity()));
+            Map<String, MysqlColumnModel> beforeColumnName2MysqlColumnModelMap = mysqlColumnModelList.stream().collect(Collectors.toMap(MysqlColumnModel::getColumnName, Function.identity()));
+            Map<String, Excel2MysqlModel> beforeColumnName2Excel2MysqlModelMap = new HashMap<>(16);
             Map<Excel2MysqlModel, MysqlColumnModel> primaryKeyExcel2Mysql2MysqlColumnModelMap = new LinkedHashMap<>(4);
 
             List<String> newUniqueKeyListList = new ArrayList<>(8);
@@ -201,7 +206,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             List<String> addColumnNameSqlList = new ArrayList<>(16);
             List<String> modifyColumnNameSqlList = new ArrayList<>(16);
             List<String> changeColumnNameSqlList = new ArrayList<>(16);
-            List<String> lastExecuteSqlList = new ArrayList<>(16);
+            List<String> lastExecuteSqlList = new ArrayList<>(32);
 
             tableExcel2MysqlModelList.forEach(tableExcel2MysqlModel -> {
                 //获取之前的字段名称
@@ -210,16 +215,18 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                 String finalColumnName = Excel2MysqlHelper.getFinalColumnName(tableExcel2MysqlModel.getColumnName());
 
                 if (beforeColumnName == null && finalColumnName == null) {
-                    throw new IllegalArgumentException(String.format("table %s has error config: before and after column name all null.", tableName));
+                    throw new IllegalArgumentException(String.format("update table `%s` has error config: before and after column all null.", tableName));
                 }
 
-                MysqlColumnModel mysqlColumnModel = columnName2MysqlColumnModelMap.get(beforeColumnName);
+                MysqlColumnModel mysqlColumnModel = beforeColumnName2MysqlColumnModelMap.get(beforeColumnName);
 
                 if (beforeColumnName != null) {
                     //检查column name必须存在
                     if (mysqlColumnModel == null) {
-                        throw new IllegalArgumentException(String.format("table %s has not found column name is %s.", tableName, beforeColumnName));
+                        throw new IllegalArgumentException(String.format("update table `%s` has error: table not exist column `%s`.", tableName, beforeColumnName));
                     }
+                    //记录之前列对应的当前列配置
+                    beforeColumnName2Excel2MysqlModelMap.put(beforeColumnName, tableExcel2MysqlModel);
                 }
 
                 if (finalColumnName == null) {
@@ -234,14 +241,14 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
 
                     if (beforeColumnName == null) {
                         //插入新字段时验证该字段不存在
-                        if (columnName2MysqlColumnModelMap.get(finalColumnName) != null) {
-                            throw new IllegalArgumentException(String.format("table %s has already exist column name is %s.", tableName, finalColumnName));
+                        if (beforeColumnName2MysqlColumnModelMap.get(finalColumnName) != null) {
+                            throw new IllegalArgumentException(String.format("update table `%s` has error config: table has already exist column `%s`.", tableName, finalColumnName));
                         }
                         addColumnNameSqlList.add(Excel2MysqlHelper.getTableAddColumnNameSql(tableName, Excel2MysqlHelper.getColumnDefinition(finalColumnName, tableExcel2MysqlModel)));
                     } else {
                         //字段更新时
                         if (StringUtils.equals(beforeColumnName, finalColumnName)) {
-                            if (Excel2MysqlHelper.isColumnChanged(tableExcel2MysqlModel, mysqlColumnModel)) {
+                            if (Excel2MysqlHelper.isColumnDefinitionChanged(tableExcel2MysqlModel, mysqlColumnModel)) {
                                 modifyColumnNameSqlList.add(Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, Excel2MysqlHelper.getColumnDefinition(finalColumnName, tableExcel2MysqlModel)));
                             }
                         } else {
@@ -263,131 +270,15 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                 }
             });
 
-            // 处理pk
-            if (!primaryKeyExcel2Mysql2MysqlColumnModelMap.isEmpty()) {
-
-                Set<String> removedAutoIncrementColumns = new HashSet<>(4);
-
-                List<MysqlColumnModel> beforePrimaryKeyMysqlColumnModelList = mysqlColumnModelList.stream().filter(mysqlColumnModel -> MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType()) == ColumnKeyTypeEnum.PRIMARY_KEY).collect(Collectors.toList());
-                Map<String, String> primaryKeySqlMap = new LinkedHashMap<>(4);
-
-                List<String> primaryKeyList = new ArrayList<>(4);
-                primaryKeyExcel2Mysql2MysqlColumnModelMap.forEach((primaryKeyExcel2MysqlModel, mysqlColumnModel) -> {
-                    //获取之前的字段名称
-                    String beforeColumnName = mysqlColumnModel.getColumnName();
-
-                    //获取最终的字段名称
-                    String finalColumnName = Excel2MysqlHelper.getFinalColumnName(primaryKeyExcel2MysqlModel.getColumnName());
-                    //获取当前字段定义的描述
-                    String columnDefinition = Excel2MysqlHelper.getColumnDefinition(finalColumnName, primaryKeyExcel2MysqlModel);
-
-                    primaryKeyList.add(finalColumnName);
-
-                    boolean hasAutoIncrement = MysqlBoostHelper.hasAutoIncrement(columnDefinition);
-                    String beforeSql;
-                    String afterSql;
-
-                    if (mysqlColumnModel == null) {
-                        //新字段时
-                        if (hasAutoIncrement) {
-                            beforeSql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
-                            afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
-                        } else {
-                            beforeSql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, columnDefinition);
-                            afterSql = null;
-                        }
-                    } else {
-                        //字段更新时
-                        if (StringUtils.equals(mysqlColumnModel.getColumnName(), finalColumnName)) {
-                            if (Excel2MysqlHelper.isColumnChanged(primaryKeyExcel2MysqlModel, mysqlColumnModel)) {
-                                if (hasAutoIncrement) {
-                                    beforeSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
-                                    afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
-                                } else {
-                                    beforeSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
-                                    afterSql = null;
-                                }
-                            } else {
-                                //未发生变化时
-                                beforeSql = null;
-                                afterSql = null;
-                            }
-                            removedAutoIncrementColumns.add(beforeColumnName);
-                        } else {
-                            if (hasAutoIncrement) {
-                                beforeSql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
-                                afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
-                            } else {
-                                beforeSql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, columnDefinition);
-                                afterSql = null;
-                            }
-                            removedAutoIncrementColumns.add(beforeColumnName);
-                        }
-                    }
-
-                    if (beforeSql != null) {
-                        primaryKeySqlMap.put(beforeSql, afterSql);
-                    }
-                });
-
-                //添加pk索引sql
-                String addPrimaryKeyIndexSql = Excel2MysqlHelper.getTableAddPrimaryKeyIndexSql(tableName, primaryKeyList);
-
-                if (beforePrimaryKeyMysqlColumnModelList.isEmpty()) {
-                    //之前不存在pk索引时
-
-                    //先处理列
-                    primaryKeySqlMap.keySet().forEach(beforeSql -> lastExecuteSqlList.add(beforeSql));
-
-                    //进行添加pk索引
-                    lastExecuteSqlList.add(addPrimaryKeyIndexSql);
-
-                    //再处理后续sql(e.g: 修改列为自增)
-                    primaryKeySqlMap.values().forEach(afterSql -> {
-                        if (afterSql != null) {
-                            lastExecuteSqlList.add(afterSql);
-                        }
-                    });
-
-                } else {
-                    //先处理列
-                    primaryKeySqlMap.keySet().forEach(beforeSql -> lastExecuteSqlList.add(beforeSql));
-
-                    //移除之前的pk索引(先移除之前的自增列 - 此时列名未发生变化)
-                    beforePrimaryKeyMysqlColumnModelList.forEach(it -> {
-                        if (!removedAutoIncrementColumns.contains(it.getColumnName()) && MysqlBoostHelper.hasAutoIncrement(it.getColumnExtra())) {
-                            //未被处理过且为自增列时
-                            String columnDefinition = Excel2MysqlHelper.getColumnDefinition(it.getColumnName(), it);
-                            lastExecuteSqlList.add(Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition)));
-                        }
-                    });
-
-                    if (!lastExecuteSqlList.isEmpty()) {
-                        //存在sql语句时
-
-                        //删除pk索引
-                        lastExecuteSqlList.add(Excel2MysqlHelper.getTableDropPrimaryKeyIndexSql(tableName));
-
-                        //进行添加pk索引
-                        lastExecuteSqlList.add(addPrimaryKeyIndexSql);
-
-                        //再处理后续sql(若存在修改为自增等)
-                        primaryKeySqlMap.values().forEach(afterSql -> {
-                            if (afterSql != null) {
-                                lastExecuteSqlList.add(afterSql);
-                            }
-                        });
-                    }
-
-                }
-            }
+            //处理pk
+            lastExecuteSqlList.addAll(getUpdateAutoModePrimaryKeySqlList(tableName, dropColumnNames, mysqlColumnModelList, primaryKeyExcel2Mysql2MysqlColumnModelMap, beforeColumnName2Excel2MysqlModelMap));
 
             //处理唯一key索引
             if (!newUniqueKeyListList.isEmpty()) {
                 newUniqueKeyListList.forEach(uniqueKey -> lastExecuteSqlList.add(Excel2MysqlHelper.getTableAddUniqueColumnIndexSql(tableName, uniqueKey)));
             }
 
-            List<String> toExecuteSqlList = new ArrayList<>(32);
+            List<String> toExecuteSqlList = new ArrayList<>(64);
             //删除table指定列
             if (!dropColumnNames.isEmpty()) {
                 String dropColumnNamesSql = Excel2MysqlHelper.getTableDropColumnNamesSql(tableName, dropColumnNames);
@@ -400,21 +291,171 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             toExecuteSqlList.addAll(lastExecuteSqlList);
 
             if (toExecuteSqlList.isEmpty()) {
-                MAIN_LOG.info("database {} update table {} not changed.", database, tableName);
+                MAIN_LOG.info("database {} update table `{}` not changed.", database, tableName);
             } else {
-                MAIN_LOG.info("database {} update table {} start", database, tableName);
+                MAIN_LOG.info("database {} update table `{}` start", database, tableName);
                 //执行sql
                 toExecuteSqlList.forEach(it -> {
                     String toExecuteSqlSql = MysqlBoostHelper.getPrettifySql(it);
-                    MAIN_LOG.info("database {} update table {} sql - {}", database, tableName, toExecuteSqlSql);
+                    MAIN_LOG.info("database {} update table `{}` sql - {}", database, tableName, toExecuteSqlSql);
                     MysqlUtils.execute(jdbcTemplate, toExecuteSqlSql);
                 });
-                MAIN_LOG.info("database {} update table {} end", database, tableName);
+                MAIN_LOG.info("database {} update table `{}` end", database, tableName);
             }
 
 
         }
     }
 
+    /**
+     * 获取处理pk的sql列表
+     *
+     * @param tableName
+     * @param dropColumnNames
+     * @param mysqlColumnModelList
+     * @param primaryKeyExcel2Mysql2MysqlColumnModelMap
+     * @param beforeColumnName2Excel2MysqlModelMap
+     * @return
+     */
+    private List<String> getUpdateAutoModePrimaryKeySqlList(String tableName, List<String> dropColumnNames, List<MysqlColumnModel> mysqlColumnModelList, Map<Excel2MysqlModel, MysqlColumnModel> primaryKeyExcel2Mysql2MysqlColumnModelMap, Map<String, Excel2MysqlModel> beforeColumnName2Excel2MysqlModelMap) {
+        if (primaryKeyExcel2Mysql2MysqlColumnModelMap.isEmpty()) {
+            //不存在时忽略
+            return Collections.emptyList();
+        }
+
+        //处理pk
+        List<MysqlColumnModel> beforePrimaryKeyMysqlColumnModelList = mysqlColumnModelList.stream().filter(mysqlColumnModel -> MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType()) == ColumnKeyTypeEnum.PRIMARY_KEY).collect(Collectors.toList());
+        beforePrimaryKeyMysqlColumnModelList.forEach(mysqlColumnModel -> {
+            String columnName = mysqlColumnModel.getColumnName();
+            //检查主键列在要更新列的配置中
+            if (beforeColumnName2Excel2MysqlModelMap.get(columnName) == null) {
+                throw new IllegalArgumentException(String.format("table `%s` has error config: not found primary key `%s` config in excel.", tableName, columnName));
+            }
+        });
+
+        List<String> sqlList = new ArrayList<>(16);
+        List<String> primaryKeyList = new ArrayList<>(4);
+        Set<String> changedAutoIncrementColumns = new HashSet<>(4);
+        Map<String, String> primaryKeySqlMap = new LinkedHashMap<>(4);
+
+        primaryKeyExcel2Mysql2MysqlColumnModelMap.forEach((primaryKeyExcel2MysqlModel, mysqlColumnModel) -> {
+            //获取最终的字段名称
+            String finalColumnName = Excel2MysqlHelper.getFinalColumnName(primaryKeyExcel2MysqlModel.getColumnName());
+            //获取当前字段定义的描述
+            String columnDefinition = Excel2MysqlHelper.getColumnDefinition(finalColumnName, primaryKeyExcel2MysqlModel);
+
+            primaryKeyList.add(finalColumnName);
+
+            boolean hasAutoIncrement = MysqlBoostHelper.hasAutoIncrement(columnDefinition);
+
+            String beforeSql;
+            String afterSql;
+
+            if (mysqlColumnModel == null) {
+                //新增字段时
+                if (hasAutoIncrement) {
+                    beforeSql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
+                    afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
+                    changedAutoIncrementColumns.add(finalColumnName);
+                } else {
+                    beforeSql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, columnDefinition);
+                    afterSql = null;
+                }
+            } else {
+                //字段更新时
+
+                //获取之前的字段名称
+                String beforeColumnName = mysqlColumnModel.getColumnName();
+                String beforeColumnDefinition = Excel2MysqlHelper.getColumnDefinition(beforeColumnName, mysqlColumnModel);
+                boolean beforeHasAutoIncrement = MysqlBoostHelper.hasAutoIncrement(beforeColumnDefinition);
+                boolean isColumnDefinitionChanged = Excel2MysqlHelper.isColumnDefinitionChanged(primaryKeyExcel2MysqlModel, mysqlColumnModel);
+                if (StringUtils.equals(beforeColumnName, finalColumnName)) {
+                    //列名未变更时
+                    if (isColumnDefinitionChanged) {
+                        if (hasAutoIncrement) {
+                            if (beforeHasAutoIncrement) {
+                                //之前也是自增列
+                                beforeSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
+                                afterSql = null;
+                            } else {
+                                beforeSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
+                                afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
+                                changedAutoIncrementColumns.add(finalColumnName);
+                            }
+                        } else {
+                            //非自增列时
+                            beforeSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
+                            afterSql = null;
+                        }
+                    } else {
+                        //未发生变化时
+                        beforeSql = null;
+                        afterSql = null;
+                    }
+                } else {
+                    //列名变更时
+                    if (hasAutoIncrement) {
+                        if (beforeHasAutoIncrement) {
+                            //之前也是自增列
+                            beforeSql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, columnDefinition);
+                            afterSql = null;
+                        } else {
+                            beforeSql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, MysqlBoostHelper.getRemovedAutoIncrementSql(columnDefinition));
+                            afterSql = Excel2MysqlHelper.getTableModifyColumnNameSql(tableName, columnDefinition);
+                            changedAutoIncrementColumns.add(finalColumnName);
+                        }
+                    } else {
+                        //非自增列时
+                        beforeSql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, columnDefinition);
+                        afterSql = null;
+                    }
+                }
+            }
+
+            if (beforeSql != null) {
+                primaryKeySqlMap.put(beforeSql, afterSql);
+            }
+        });
+
+        //添加pk索引sql
+        String addPrimaryKeyIndexSql = Excel2MysqlHelper.getTableAddPrimaryKeyIndexSql(tableName, primaryKeyList);
+
+        if (beforePrimaryKeyMysqlColumnModelList.isEmpty() || dropColumnNames.containsAll(beforePrimaryKeyMysqlColumnModelList.stream().map(MysqlColumnModel::getColumnName).collect(Collectors.toList()))) {
+            //之前不存在pk索引 / 之前pk列全被移除时
+
+            //先处理列变更
+            primaryKeySqlMap.keySet().forEach(beforeSql -> sqlList.add(beforeSql));
+
+            //进行添加pk索引
+            sqlList.add(addPrimaryKeyIndexSql);
+
+            //再处理后续sql(e.g: 修改列为自增)
+            primaryKeySqlMap.values().forEach(afterSql -> {
+                if (afterSql != null) {
+                    sqlList.add(afterSql);
+                }
+            });
+
+        } else {
+            //先处理列变更
+            primaryKeySqlMap.keySet().forEach(beforeSql -> sqlList.add(beforeSql));
+
+            if (!changedAutoIncrementColumns.isEmpty() || primaryKeyList.size() != beforePrimaryKeyMysqlColumnModelList.size()) {
+                //进行删除之前的pk索引 (自增列变更 / 主键列个数变更)
+                sqlList.add(Excel2MysqlHelper.getTableDropPrimaryKeyIndexSql(tableName));
+
+                //进行重新添加pk索引
+                sqlList.add(addPrimaryKeyIndexSql);
+            }
+
+            //再处理后续sql(若存在修改为自增等)
+            primaryKeySqlMap.values().forEach(afterSql -> {
+                if (afterSql != null) {
+                    sqlList.add(afterSql);
+                }
+            });
+        }
+        return sqlList;
+    }
 
 }

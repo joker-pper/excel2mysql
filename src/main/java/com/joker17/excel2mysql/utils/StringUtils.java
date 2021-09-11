@@ -68,4 +68,11 @@ public class StringUtils {
         }
     }
 
+    public static String defaultIfEmpty(String value, String defaultValue) {
+        if (isEmpty(value)) {
+            return defaultValue;
+        }
+        return value;
+    }
+
 }

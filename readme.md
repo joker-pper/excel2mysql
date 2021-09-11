@@ -5,20 +5,25 @@
 ## 功能
 
 + 通过数据源及excel文件导入mysql database进行生成、更新表(支持create/update)
-+ 创建表支持PK(包含复合主键)、UK索引(单列)
-+ 更新表支持PK(包含复合主键)、增加UK索引(单列)
 + 支持xls xlsx
-+ 可跳过检查table schema
-+ 支持过滤table
-    
++ 支持创建表时指定存储引擎,默认InnoDB
++ 可跳过检查table schema及支持过滤table
++ 创建表支持PK(包含复合主键)、UK索引(单列)
++ 更新表支持PK(包含复合主键)、增加UK索引(单列)、新增/移除/变更列
++ 更新表存在配置索引进行处理时一般只增加不删除(除非PK变更,注:列移除会影响索引)    
 
 ## tips
 
- - 线上环境谨慎操作
+ - 线上环境谨慎操作(后果自负)
  
- - 线上环境谨慎操作
+ - 线上环境谨慎操作(后果自负)
  
- - 线上环境谨慎操作
+ - 线上环境谨慎操作(后果自负)
+  
+ - 推荐使用环境: 本地环境(验证后再自行斟酌) 
+ 
+ - 支持但不建议使用更新表提供的PK、UK能力
+
 
 ## 使用准备
 
@@ -54,6 +59,9 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
 # 导入xls进行创建表 不检查table schema (即excel中可与数据源的数据库名称不一致)
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/create-excel.xls -excel-type xls -check-table-schema false
 
+# 导入xls进行创建表 指定存储引擎为MyISAM 不检查table schema 
+java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -engine MyISAM -file-name ../src/test/resources/create-excel.xls -excel-type xls -check-table-schema false
+
 # 导入xls进行创建表 (指定table - user, 即只导入user) 不检查table schema
 java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.properties -file-name ../src/test/resources/create-excel.xls -excel-type xls -filter-table user -check-table-schema false
 
@@ -86,6 +94,9 @@ java -jar excel2mysql-1.0.0-SNAPSHOT.jar -data-source ../src/test/resources/db.p
     -excel-type
       excel type, values: xls / xlsx, default value xls
     
+    -engine
+      table engine, default value InnoDB
+
     -exclude-table
       exclude table mode
       Default: false

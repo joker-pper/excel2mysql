@@ -143,21 +143,22 @@ public class Excel2MysqlExecutorTest {
         String revertFileName = "update-excel-revert.xlsx";
         boolean hasError = false;
         try {
+            logger.info("execute update update-excel (create-excel/update-excel-revert updated table -> update-excel) start");
             executeUpdateXlsx(fileName);
+            logger.info("execute update update-excel (create-excel/update-excel-revert updated table -> update-excel) end.");
         } catch (Exception ex) {
-            logger.error("execute update update-excel has error: maybe updated, try to revert.");
             hasError = true;
-            logger.info("execute update update-excel-revert start");
-            executeUpdateXlsx(revertFileName);
-            logger.info("execute update update-excel-revert end.");
-        } finally {
-            if (hasError) {
-                logger.error("execute update update-excel retry to execute start");
-                executeUpdateXlsx(fileName);
-                logger.error("execute update update-excel retry to execute end.");
-            }
         }
 
+        if (hasError) {
+            logger.error("execute update update-excel (create-excel/update-excel-revert updated table -> update-excel) end and has error: maybe updated by update-excel, try to execute revert.");
+
+            logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+            logger.info("execute update update-excel-revert (update-excel updated table -> update-excel-revert) start");
+            executeUpdateXlsx(revertFileName);
+            logger.info("execute update update-excel-revert (update-excel updated table -> update-excel-revert) end.");
+            logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+        }
     }
 
     private void executeUpdateXlsx(String fileName) throws IOException {

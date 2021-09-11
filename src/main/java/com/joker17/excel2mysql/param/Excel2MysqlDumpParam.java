@@ -57,6 +57,12 @@ public class Excel2MysqlDumpParam {
     @Parameter(names = {"-auto-mode"}, description = "auto mode, values: create / update, default value create")
     private String autoMode;
 
+    /**
+     * 引擎
+     */
+    @Parameter(names = {"-engine"}, description = "table engine, default value InnoDB")
+    private String engine;
+
     @Parameter(names = {"--help", "--h"}, help = true, order = 5)
     private boolean help;
 
@@ -122,6 +128,14 @@ public class Excel2MysqlDumpParam {
 
     public void setAutoMode(String autoMode) {
         this.autoMode = autoMode;
+    }
+
+    public String getEngine() {
+        return engine;
+    }
+
+    public void setEngine(String engine) {
+        this.engine = engine;
     }
 
     public boolean isHelp() {

@@ -6,10 +6,12 @@ import com.joker17.excel2mysql.enums.ColumnKeyTypeEnum;
 import com.joker17.excel2mysql.model.Excel2MysqlModel;
 import com.joker17.excel2mysql.model.MysqlColumnModel;
 import com.joker17.excel2mysql.utils.StringUtils;
-import com.sun.org.apache.bcel.internal.ExceptionConstants;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class Excel2MysqlHelper {
 
@@ -149,10 +151,11 @@ public class Excel2MysqlHelper {
      * <p>
      *
      * @param tableName
+     * @param engine
      * @param excel2MysqlModelList
      * @return
      */
-    public static String getCreateSql(String tableName, List<Excel2MysqlModel> excel2MysqlModelList) {
+    public static String getCreateSql(String tableName, String engine, List<Excel2MysqlModel> excel2MysqlModelList) {
 
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE `");
@@ -166,7 +169,7 @@ public class Excel2MysqlHelper {
 
             String columnName = getFinalColumnName(excel2MysqlModel.getColumnName());
             if (columnName == null) {
-                throw new IllegalArgumentException(String.format("table %s has column name is null.", tableName));
+                throw new IllegalArgumentException(String.format("table `%s` build create sql has error: column exist empty.", tableName));
             }
 
             //拼接column字段定义内容, 列名 + 类型 + 值描述 + Extra + Comment
@@ -203,7 +206,7 @@ public class Excel2MysqlHelper {
         sb.delete(len - 2, len);
 
         //字符集默认
-        sb.append("\n) ENGINE=InnoDB");
+        sb.append("\n) ENGINE=").append(engine);
 
         return MysqlBoostHelper.getPrettifySql(sb.toString());
     }
@@ -424,13 +427,13 @@ public class Excel2MysqlHelper {
 
 
     /**
-     * 获取列是否发生改变
+     * 获取列定义内容是否发生改变
      *
      * @param excel2MysqlModel
      * @param mysqlColumnModel
      * @return
      */
-    public static boolean isColumnChanged(Excel2MysqlModel excel2MysqlModel, MysqlColumnModel mysqlColumnModel) {
+    public static boolean isColumnDefinitionChanged(Excel2MysqlModel excel2MysqlModel, MysqlColumnModel mysqlColumnModel) {
 
         if (!StringUtils.equals(StringUtils.trimToEmpty(excel2MysqlModel.getColumnType()), StringUtils.trimToEmpty(mysqlColumnModel.getColumnType()))) {
             return true;
