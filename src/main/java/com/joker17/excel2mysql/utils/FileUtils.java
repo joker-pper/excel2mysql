@@ -4,6 +4,9 @@ import java.io.File;
 
 public class FileUtils {
 
+    private FileUtils() {
+    }
+
     /**
      * mkdirs
      *
@@ -52,6 +55,7 @@ public class FileUtils {
         sb.append(fileName);
 
         if (!fileName.contains(".")) {
+            //文件名不包含.时
             sb.append(".");
             sb.append(excelType);
         }

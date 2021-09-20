@@ -4,6 +4,9 @@ import java.util.Locale;
 
 public class StringUtils {
 
+    private StringUtils() {
+    }
+
     public static String convertString(Object object) {
         return object == null ? null : String.valueOf(object);
     }

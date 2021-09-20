@@ -10,6 +10,9 @@ import java.util.Properties;
 
 public class JdbcUtils {
 
+    private JdbcUtils() {
+    }
+
     /**
      * 加载properties
      *

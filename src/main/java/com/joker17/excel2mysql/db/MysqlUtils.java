@@ -7,6 +7,9 @@ import java.util.*;
 
 public class MysqlUtils {
 
+    private MysqlUtils() {
+    }
+
     /**
      * 获取当前数据库名称
      *
@@ -29,9 +32,7 @@ public class MysqlUtils {
         String sql = "SHOW TABLE STATUS WHERE 1=1";
         List<Map<String, Object>> resultMapList = jdbcTemplate.queryForList(sql);
         List<String> resultList = new ArrayList<>(32);
-        resultMapList.forEach(resultMap -> {
-            resultList.add(StringUtils.convertString(resultMap.get("Name")));
-        });
+        resultMapList.forEach(resultMap -> resultList.add(StringUtils.convertString(resultMap.get("Name"))));
         return resultList;
     }
 

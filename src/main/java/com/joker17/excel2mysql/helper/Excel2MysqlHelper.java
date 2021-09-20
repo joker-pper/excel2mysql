@@ -8,12 +8,13 @@ import com.joker17.excel2mysql.model.MysqlColumnModel;
 import com.joker17.excel2mysql.utils.StringUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Excel2MysqlHelper {
+
+    private Excel2MysqlHelper() {
+    }
 
     /**
      * 获取excelType
@@ -186,6 +187,10 @@ public class Excel2MysqlHelper {
                 case UNIQUE_KEY:
                     uniqueKeyList.add(columnName);
                     break;
+                case PRIMARY_AND_UNIQUE_KEY:
+                    primaryKeyList.add(columnName);
+                    uniqueKeyList.add(columnName);
+                    break;
                 case OTHER:
                 default:
                     //其他类型忽略..
@@ -206,7 +211,7 @@ public class Excel2MysqlHelper {
         sb.delete(len - 2, len);
 
         //字符集默认
-        sb.append("\n) ENGINE=").append(engine);
+        sb.append("\n) ENGINE=").append(engine).append(";");
 
         return MysqlBoostHelper.getPrettifySql(sb.toString());
     }
@@ -293,7 +298,7 @@ public class Excel2MysqlHelper {
 
         //Extra
         if (!StringUtils.isEmpty(columnExtra)) {
-            String filteredColumnExtra = MysqlBoostHelper.getFilteredColumnExtra(columnExtra);
+            String filteredColumnExtra = MysqlBoostHelper.getFilteredColumnExtra(columnExtra, true);
             if (!StringUtils.isEmpty(filteredColumnExtra)) {
                 sb.append(" ").append(filteredColumnExtra);
             }
@@ -409,19 +414,74 @@ public class Excel2MysqlHelper {
         String sql = String.format("SHOW FULL FIELDS FROM `%s`", tableName);
         List<Map<String, Object>> resultMapList = jdbcTemplate.queryForList(sql);
         List<MysqlColumnModel> resultList = new ArrayList<>(64);
+        //待处理column key的map
+        Map<String, MysqlColumnModel> toResolveColumnKeyTypeMap = new HashMap<>(8);
         resultMapList.forEach(resultMap -> {
-            MysqlColumnModel mysql2ExcelModel = new MysqlColumnModel();
-            mysql2ExcelModel.setTableSchema(database);
-            mysql2ExcelModel.setTableName(tableName);
-            mysql2ExcelModel.setColumnName(StringUtils.convertString(resultMap.get("Field")));
-            mysql2ExcelModel.setColumnType(StringUtils.convertString(resultMap.get("Type")));
-            mysql2ExcelModel.setColumnDefaultValue(StringUtils.convertString(resultMap.get("Default")));
-            mysql2ExcelModel.setColumnNotNull(MysqlBoostHelper.getConvertColumnNotNull(StringUtils.convertString(resultMap.get("Null"))));
-            mysql2ExcelModel.setColumnComment(StringUtils.convertString(resultMap.get("Comment")));
-            mysql2ExcelModel.setColumnExtra(MysqlBoostHelper.getFilteredColumnExtra(StringUtils.convertString(resultMap.get("Extra"))));
-            mysql2ExcelModel.setColumnKeyType(MysqlBoostHelper.getConvertColumnKeyType(StringUtils.convertString(resultMap.get("Key"))));
-            resultList.add(mysql2ExcelModel);
+            MysqlColumnModel mysqlColumnModel = new MysqlColumnModel();
+            mysqlColumnModel.setTableSchema(database);
+            mysqlColumnModel.setTableName(tableName);
+            mysqlColumnModel.setColumnName(StringUtils.convertString(resultMap.get("Field")));
+            mysqlColumnModel.setColumnType(StringUtils.convertString(resultMap.get("Type")));
+            mysqlColumnModel.setColumnDefaultValue(StringUtils.convertString(resultMap.get("Default")));
+            mysqlColumnModel.setColumnNotNull(MysqlBoostHelper.getConvertColumnNotNull(StringUtils.convertString(resultMap.get("Null"))));
+            mysqlColumnModel.setColumnComment(StringUtils.convertString(resultMap.get("Comment")));
+            mysqlColumnModel.setColumnExtra(MysqlBoostHelper.getFilteredColumnExtra(StringUtils.convertString(resultMap.get("Extra"))));
+
+            String columnKeyType = MysqlBoostHelper.getConvertColumnKeyType(StringUtils.convertString(resultMap.get("Key")));
+            ColumnKeyTypeEnum columnKeyTypeEnum = MysqlBoostHelper.getColumnKeyType(columnKeyType);
+            if (columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY) {
+                toResolveColumnKeyTypeMap.put(mysqlColumnModel.getColumnName(), mysqlColumnModel);
+            }
+            mysqlColumnModel.setColumnKeyType(columnKeyType);
+            resultList.add(mysqlColumnModel);
         });
+
+        if (!toResolveColumnKeyTypeMap.isEmpty()) {
+            //处理PRI返回的字段实际类型是UK/PK/PK且UK?
+            // (表中只存在唯一索引(包含复合唯一索引)不存在主键时通过 desc table / SHOW FULL FIELDS FROM table 返回的 Key -> PRI)
+            List<Map<String, Object>> indexResultMapList = jdbcTemplate.queryForList(String.format("SHOW INDEX FROM `%s`", tableName));
+            Map<String, List<Map<String, Object>>> columnName2IndexResultMapListMap = indexResultMapList.stream().collect(Collectors.groupingBy(it -> StringUtils.convertString(it.get("Column_name"))));
+            Map<String, List<Map<String, Object>>> keyName2IndexResultMapListMap = indexResultMapList.stream().collect(Collectors.groupingBy(it -> StringUtils.convertString(it.get("Key_name"))));
+
+            toResolveColumnKeyTypeMap.forEach((columnName, mysqlColumnModel) -> {
+                List<Map<String, Object>> columnName2IndexResultMapList = columnName2IndexResultMapListMap.get(columnName);
+                if (columnName2IndexResultMapList != null) {
+                    boolean hasPrimaryKey = false;
+                    boolean hasUniqueKey = false;
+                    for (Map<String, Object> columnName2IndexResultMap : columnName2IndexResultMapList) {
+                        if (StringUtils.equals((String) columnName2IndexResultMap.get("Key_name"), "PRIMARY")) {
+                            hasPrimaryKey = true;
+                        } else {
+                            if (StringUtils.equals(StringUtils.convertString(columnName2IndexResultMap.get("Non_unique")), "0")) {
+                                //是Unique约束时
+                                if (keyName2IndexResultMapListMap.get(StringUtils.convertString(columnName2IndexResultMap.get("Key_name"))).size() == 1) {
+                                    //该列存在单独的Unique约束时
+                                    hasUniqueKey = true;
+                                }
+                            }
+                        }
+
+                        if (hasPrimaryKey && hasUniqueKey) {
+                            break;
+                        }
+                    }
+
+                    if (hasPrimaryKey && hasUniqueKey) {
+                        mysqlColumnModel.setColumnKeyType(ColumnKeyTypeEnum.Constants.PRIMARY_AND_UNIQUE_KEY);
+                    } else {
+                        if (hasPrimaryKey) {
+                            mysqlColumnModel.setColumnKeyType(ColumnKeyTypeEnum.Constants.PRIMARY_KEY);
+                        } else if (hasUniqueKey) {
+                            mysqlColumnModel.setColumnKeyType(ColumnKeyTypeEnum.Constants.UNIQUE_KEY);
+                        } else {
+                            //e.g: 表中只存在一组  UNIQUE KEY `uk_name_code` (`name`,`code`)
+                            mysqlColumnModel.setColumnKeyType(null);
+                        }
+                    }
+                }
+            });
+        }
+
         return resultList;
     }
 
@@ -443,7 +503,7 @@ public class Excel2MysqlHelper {
             return true;
         }
 
-        if (!StringUtils.equals(MysqlBoostHelper.getFilteredColumnExtra(excel2MysqlModel.getColumnExtra()), MysqlBoostHelper.getFilteredColumnExtra(mysqlColumnModel.getColumnExtra()))) {
+        if (!StringUtils.equals(MysqlBoostHelper.getFilteredColumnExtra(excel2MysqlModel.getColumnExtra(), true), MysqlBoostHelper.getFilteredColumnExtra(mysqlColumnModel.getColumnExtra(), true))) {
             return true;
         }
 
@@ -454,7 +514,6 @@ public class Excel2MysqlHelper {
         if (!StringUtils.equals(excel2MysqlModel.getColumnDefaultValue(), mysqlColumnModel.getColumnDefaultValue())) {
             return true;
         }
-
 
         return false;
     }

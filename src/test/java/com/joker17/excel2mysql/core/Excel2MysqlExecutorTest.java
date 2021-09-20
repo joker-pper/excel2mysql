@@ -3,11 +3,11 @@ package com.joker17.excel2mysql.core;
 import com.joker17.excel2mysql.constants.Excel2MysqlConstants;
 import com.joker17.excel2mysql.db.JdbcUtils;
 import com.joker17.excel2mysql.db.MysqlUtils;
+import com.joker17.excel2mysql.support.DynamicIgnoredRunner;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.BlockJUnit4ClassRunner;
-import org.junit.runners.model.FrameworkMethod;
-import org.junit.runners.model.InitializationError;
+import org.junit.runners.MethodSorters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,79 +16,24 @@ import javax.sql.DataSource;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Properties;
 
 /**
  * 1.创建database: CREATE DATABASE IF NOT EXISTS excel2mysql
  * 2.修改db.properties
  */
-@RunWith(Excel2MysqlExecutorTest.DynamicIgnoredRunner.class)
+@RunWith(DynamicIgnoredRunner.class)
+@FixMethodOrder(MethodSorters.JVM)
 public class Excel2MysqlExecutorTest {
 
     private final static Logger logger = LoggerFactory.getLogger(Excel2MysqlExecutorTest.class);
 
     private final static String targetClassPath = Excel2MysqlExecutorTest.class.getClassLoader().getResource("").getPath();
 
-    /**
-     * 是否忽略tests
-     */
-    private static volatile Boolean isIgnoredTests = null;
-
-    public static class DynamicIgnoredRunner extends BlockJUnit4ClassRunner {
-
-        public DynamicIgnoredRunner(Class<?> testClass) throws InitializationError {
-            super(testClass);
-        }
-
-        protected boolean loadIsIgnoredTests() {
-            File dataSourcePropertiesFile = new File(targetClassPath + "db.properties");
-            Properties properties = null;
-            try {
-                properties = JdbcUtils.loadProperties(new FileInputStream(dataSourcePropertiesFile));
-            } catch (IOException e) {
-            }
-
-            if (properties == null) {
-                logger.error("ignored tests: can't find properties {}", dataSourcePropertiesFile.getPath());
-                return true;
-            }
-
-            Connection connection = null;
-            try {
-                DataSource dataSource = JdbcUtils.getDataSource(properties);
-                connection = dataSource.getConnection();
-            } catch (SQLException ex) {
-            }
-
-            if (connection == null) {
-                logger.error("ignored tests: can't get connection");
-                return true;
-            }
-
-            return false;
-        }
-
-        @Override
-        protected boolean isIgnored(FrameworkMethod frameworkMethod) {
-            if (isIgnoredTests == null) {
-                synchronized (Excel2MysqlExecutorTest.class) {
-                    if (isIgnoredTests == null) {
-                        isIgnoredTests = loadIsIgnoredTests();
-                    }
-                }
-            }
-            return isIgnoredTests;
-        }
-    }
-
-
     @Test
     public void executeWithHelpArg() throws IOException {
         Excel2MysqlExecutor.INSTANCE.execute(new String[]{"--help"});
     }
-
 
     /**
      * 删除数据库全部的表 (慎用)
@@ -97,7 +42,7 @@ public class Excel2MysqlExecutorTest {
      */
     @Test
     public void executeWithClearDatabase() throws IOException {
-        boolean dropAllTables = false;
+        boolean dropAllTables = true;
         if (dropAllTables) {
             //开启时执行清除当前数据源的所有表
             File dataSourcePropertiesFile = new File(targetClassPath + "db.properties");
@@ -108,7 +53,6 @@ public class Excel2MysqlExecutorTest {
             logger.warn("drop all tables complete ...");
         }
     }
-
 
     @Test
     public void executeCreateXls() throws IOException {
@@ -160,6 +104,13 @@ public class Excel2MysqlExecutorTest {
             logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
         }
     }
+
+
+    @Test
+    public void executeUpdateXlsxRepeat() throws IOException {
+        executeUpdateXlsx();
+    }
+
 
     private void executeUpdateXlsx(String fileName) throws IOException {
         String inFilePath = targetClassPath;

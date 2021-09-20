@@ -9,6 +9,8 @@ import java.util.Objects;
 
 public class MysqlBoostHelper {
 
+    private MysqlBoostHelper() {
+    }
 
     /**
      * 是否为匹配到要处理的表名
@@ -98,11 +100,11 @@ public class MysqlBoostHelper {
 
         if (Objects.equals("PRI", text)) {
             //PRIMARY KEY
-            return "PK";
+            return ColumnKeyTypeEnum.Constants.PRIMARY_KEY;
         }
         if (Objects.equals("UNI", text)) {
             //UNIQUE KEY
-            return "UK";
+            return ColumnKeyTypeEnum.Constants.UNIQUE_KEY;
         }
         return null;
     }
@@ -116,7 +118,7 @@ public class MysqlBoostHelper {
      */
     public static boolean isPrimaryKey(String text) {
         text = StringUtils.toUpperCase(StringUtils.trimToEmpty(text));
-        return Objects.equals("PK", text) || Objects.equals("PRI", text) || Objects.equals("PRIMARY KEY", text);
+        return Objects.equals(ColumnKeyTypeEnum.Constants.PRIMARY_KEY, text) || Objects.equals("PRI", text) || Objects.equals("PRIMARY KEY", text);
     }
 
     /**
@@ -127,7 +129,18 @@ public class MysqlBoostHelper {
      */
     public static boolean isUniqueKey(String text) {
         text = StringUtils.toUpperCase(StringUtils.trimToEmpty(text));
-        return Objects.equals("UK", text) || Objects.equals("UNI", text) || Objects.equals("UNIQUE KEY", text);
+        return Objects.equals(ColumnKeyTypeEnum.Constants.UNIQUE_KEY, text) || Objects.equals("UNI", text) || Objects.equals("UNIQUE KEY", text);
+    }
+
+    /**
+     * 是否为PK+UK
+     *
+     * @param text
+     * @return
+     */
+    public static boolean isPrimaryAndUniqueKey(String text) {
+        text = StringUtils.toUpperCase(StringUtils.trimToEmpty(text));
+        return Objects.equals(ColumnKeyTypeEnum.Constants.PRIMARY_AND_UNIQUE_KEY, text);
     }
 
 
@@ -142,6 +155,10 @@ public class MysqlBoostHelper {
             return ColumnKeyTypeEnum.OTHER;
         }
 
+        if (isPrimaryAndUniqueKey(columnKeyType)) {
+            return ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY;
+        }
+
         if (isPrimaryKey(columnKeyType)) {
             return ColumnKeyTypeEnum.PRIMARY_KEY;
         }
@@ -153,7 +170,6 @@ public class MysqlBoostHelper {
         return ColumnKeyTypeEnum.OTHER;
     }
 
-
     /**
      * 获取过滤后的columnExtra
      *
@@ -161,8 +177,20 @@ public class MysqlBoostHelper {
      * @return
      */
     public static String getFilteredColumnExtra(String columnExtra) {
-        return StringUtils.trimToNull(StringUtils.removeStart(StringUtils.toUpperCase(columnExtra), "DEFAULT_GENERATED"));
+        return getFilteredColumnExtra(columnExtra, false);
     }
+
+    /**
+     * 获取过滤后的columnExtra
+     *
+     * @param columnExtra
+     * @param toUpperCase
+     * @return
+     */
+    public static String getFilteredColumnExtra(String columnExtra, boolean toUpperCase) {
+        return StringUtils.trimToNull(StringUtils.removeStart(toUpperCase ? StringUtils.toUpperCase(columnExtra) : columnExtra, "DEFAULT_GENERATED"));
+    }
+
 
     /**
      * 是否为自增
@@ -231,7 +259,7 @@ public class MysqlBoostHelper {
         }
 
         if (columnDefaultValue.contains("(") || columnDefaultValue.contains("_")
-                || columnDefaultValue.contains("'")  || columnDefaultValue.contains("\"")
+                || columnDefaultValue.contains("'") || columnDefaultValue.contains("\"")
                 || columnDefaultValue.contains("+") || columnDefaultValue.contains("*")
                 || columnDefaultValue.contains(",") || columnDefaultValue.contains("-")
         ) {

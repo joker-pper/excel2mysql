@@ -234,7 +234,20 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                     dropColumnNames.add(beforeColumnName);
                 } else {
                     ColumnKeyTypeEnum columnKeyTypeEnum = MysqlBoostHelper.getColumnKeyType(tableExcel2MysqlModel.getColumnKeyType());
-                    if (columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY) {
+                    ColumnKeyTypeEnum beforeColumnKeyTypeEnum = mysqlColumnModel == null ? null : MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType());
+                    switch (columnKeyTypeEnum) {
+                        case UNIQUE_KEY:
+                            if (beforeColumnKeyTypeEnum != ColumnKeyTypeEnum.UNIQUE_KEY && beforeColumnKeyTypeEnum != ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY) {
+                                newUniqueKeyListList.add(finalColumnName);
+                            }
+                            break;
+                        default:
+                            //其他类型忽略..
+                            break;
+                    }
+
+                    if (columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY || columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY) {
+                        //为PK列时(后面进行处理)
                         primaryKeyExcel2Mysql2MysqlColumnModelMap.put(tableExcel2MysqlModel, mysqlColumnModel);
                         return;
                     }
@@ -254,18 +267,6 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                         } else {
                             changeColumnNameSqlList.add(Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, Excel2MysqlHelper.getColumnDefinition(finalColumnName, tableExcel2MysqlModel)));
                         }
-                    }
-
-                    ColumnKeyTypeEnum beforeColumnKeyTypeEnum = mysqlColumnModel == null ? null : MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType());
-                    switch (columnKeyTypeEnum) {
-                        case UNIQUE_KEY:
-                            if (beforeColumnKeyTypeEnum != ColumnKeyTypeEnum.UNIQUE_KEY) {
-                                newUniqueKeyListList.add(finalColumnName);
-                            }
-                            break;
-                        default:
-                            //其他类型忽略..
-                            break;
                     }
                 }
             });
@@ -324,7 +325,11 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         }
 
         //处理pk
-        List<MysqlColumnModel> beforePrimaryKeyMysqlColumnModelList = mysqlColumnModelList.stream().filter(mysqlColumnModel -> MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType()) == ColumnKeyTypeEnum.PRIMARY_KEY).collect(Collectors.toList());
+        List<MysqlColumnModel> beforePrimaryKeyMysqlColumnModelList = mysqlColumnModelList.stream().filter(mysqlColumnModel -> {
+            ColumnKeyTypeEnum columnKeyTypeEnum = MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType());
+            return columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY || columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY;
+        }).collect(Collectors.toList());
+
         beforePrimaryKeyMysqlColumnModelList.forEach(mysqlColumnModel -> {
             String columnName = mysqlColumnModel.getColumnName();
             //检查主键列在要更新列的配置中
@@ -336,6 +341,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         List<String> sqlList = new ArrayList<>(16);
         List<String> primaryKeyList = new ArrayList<>(4);
         Set<String> changedAutoIncrementColumns = new HashSet<>(4);
+        Set<String> changedPkColumns = new HashSet<>(4);
         Map<String, String> primaryKeySqlMap = new LinkedHashMap<>(4);
 
         primaryKeyExcel2Mysql2MysqlColumnModelMap.forEach((primaryKeyExcel2MysqlModel, mysqlColumnModel) -> {
@@ -361,6 +367,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                     beforeSql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, columnDefinition);
                     afterSql = null;
                 }
+                changedPkColumns.add(finalColumnName);
             } else {
                 //字段更新时
 
@@ -369,9 +376,16 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                 String beforeColumnDefinition = Excel2MysqlHelper.getColumnDefinition(beforeColumnName, mysqlColumnModel);
                 boolean beforeHasAutoIncrement = MysqlBoostHelper.hasAutoIncrement(beforeColumnDefinition);
                 boolean isColumnDefinitionChanged = Excel2MysqlHelper.isColumnDefinitionChanged(primaryKeyExcel2MysqlModel, mysqlColumnModel);
+                ColumnKeyTypeEnum beforeColumnKeyTypeEnum = MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType());
+                if (ColumnKeyTypeEnum.PRIMARY_KEY != beforeColumnKeyTypeEnum && ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY != beforeColumnKeyTypeEnum) {
+                    //当前列之前不是PK时
+                    changedPkColumns.add(finalColumnName);
+                }
+
                 if (StringUtils.equals(beforeColumnName, finalColumnName)) {
                     //列名未变更时
                     if (isColumnDefinitionChanged) {
+                        //列发生变化时
                         if (hasAutoIncrement) {
                             if (beforeHasAutoIncrement) {
                                 //之前也是自增列
@@ -388,7 +402,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                             afterSql = null;
                         }
                     } else {
-                        //未发生变化时
+                        //列未发生变化时
                         beforeSql = null;
                         afterSql = null;
                     }
@@ -440,8 +454,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             //先处理列变更
             primaryKeySqlMap.keySet().forEach(beforeSql -> sqlList.add(beforeSql));
 
-            if (!changedAutoIncrementColumns.isEmpty() || primaryKeyList.size() != beforePrimaryKeyMysqlColumnModelList.size()) {
-                //进行删除之前的pk索引 (自增列变更 / 主键列个数变更)
+            if (!changedAutoIncrementColumns.isEmpty() || primaryKeyList.size() != beforePrimaryKeyMysqlColumnModelList.size() || !changedPkColumns.isEmpty()) {
+                //进行删除之前的pk索引 (自增列变更 / 主键列个数变更 / 主键列新增、更换)
                 sqlList.add(Excel2MysqlHelper.getTableDropPrimaryKeyIndexSql(tableName));
 
                 //进行重新添加pk索引
