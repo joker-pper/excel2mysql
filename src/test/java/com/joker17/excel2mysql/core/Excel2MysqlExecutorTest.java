@@ -42,7 +42,7 @@ public class Excel2MysqlExecutorTest {
      */
     @Test
     public void executeWithClearDatabase() throws IOException {
-        boolean dropAllTables = true;
+        boolean dropAllTables = false;
         if (dropAllTables) {
             //开启时执行清除当前数据源的所有表
             File dataSourcePropertiesFile = new File(targetClassPath + "db.properties");
