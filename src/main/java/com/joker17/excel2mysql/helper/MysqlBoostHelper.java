@@ -214,7 +214,7 @@ public class MysqlBoostHelper {
             result = result.replace("AUTO_INCREMENT", "");
             return result;
         }
-        return sql;
+        return null;
     }
 
 
@@ -258,19 +258,66 @@ public class MysqlBoostHelper {
             return null;
         }
 
-        if (columnDefaultValue.contains("(") || columnDefaultValue.contains("_")
-                || columnDefaultValue.contains("'") || columnDefaultValue.contains("\"")
-                || columnDefaultValue.contains("+") || columnDefaultValue.contains("*")
-                || columnDefaultValue.contains(",") || columnDefaultValue.contains("-")
-        ) {
+        if (columnDefaultValue.contains("(")) {
+            //为表达式时
+
+            /**
+             DROP TABLE IF EXISTS t1;
+             CREATE TABLE t1 (
+             a DATETIME    DEFAULT (CURRENT_TIMESTAMP + INTERVAL 1 YEAR),
+             b BINARY(16)  DEFAULT (UUID_TO_BIN(UUID())),
+             c DATE        DEFAULT (CURRENT_DATE - INTERVAL 1 YEAR),
+             d DATE        DEFAULT (CURRENT_DATE + INTERVAL 1 YEAR),
+             e POINT       DEFAULT (Point(0,0)),
+             f FLOAT       DEFAULT (RAND() * RAND()),
+             g JSON        DEFAULT (JSON_ARRAY()),
+             h BLOB        DEFAULT ('abc'),
+             i TIME        DEFAULT '00:00:01',
+             j YEAR        DEFAULT '2021',
+             k YEAR        DEFAULT (YEAR(NOW())),
+             l BIT(6)      DEFAULT  b'01',
+             m BINARY(16)  DEFAULT  0x31
+             );
+             **/
 
             //  a DATETIME    DEFAULT (CURRENT_TIMESTAMP + INTERVAL 1 YEAR),
-            //  f FLOAT       DEFAULT (RAND() * RAND()),
             //  b BINARY(16)  DEFAULT (UUID_TO_BIN(UUID())),
-            //  d DATE        DEFAULT (CURRENT_DATE + INTERVAL 1 YEAR),
             //  c DATE        DEFAULT (CURRENT_DATE - INTERVAL 1 YEAR),
-            //  p POINT       DEFAULT (Point(0,0)),
-            //  j JSON        DEFAULT (JSON_ARRAY())
+            //  d DATE        DEFAULT (CURRENT_DATE + INTERVAL 1 YEAR),
+            //  e POINT       DEFAULT (Point(0,0)),
+            //  f FLOAT       DEFAULT (RAND() * RAND()),
+            //  g JSON        DEFAULT (JSON_ARRAY()),
+            //  h BLOB        DEFAULT ('abc')
+
+            //  c DATE            DEFAULT  (curdate() + interval 1 year)
+            //  b BINARY(16)      DEFAULT  uuid_to_bin(uuid())
+            //  j JSON            DEFAULT  json_array()
+            String trimColumnDefaultValue = StringUtils.trimToNull(columnDefaultValue);
+            if (trimColumnDefaultValue.startsWith("(") && trimColumnDefaultValue.endsWith(")")) {
+                //以'('开始并以')'结尾时
+
+                String toReturnColumnDefaultValue = columnDefaultValue;
+
+                //替换字符 \' 为 '
+                toReturnColumnDefaultValue = StringUtils.replace(toReturnColumnDefaultValue, "\\'", "'");
+                //替换字符 \" 为 "
+                toReturnColumnDefaultValue = StringUtils.replace(toReturnColumnDefaultValue, "\\\"", "\"");
+
+                return toReturnColumnDefaultValue;
+            } else {
+                //用括号把值包起来
+                String toReturnColumnDefaultValue = String.format("(%s)", columnDefaultValue);
+
+                //替换字符 \' 为 '
+                toReturnColumnDefaultValue = StringUtils.replace(toReturnColumnDefaultValue, "\\'", "'");
+                //替换字符 \" 为 "
+                toReturnColumnDefaultValue = StringUtils.replace(toReturnColumnDefaultValue, "\\\"", "\"");
+
+                return toReturnColumnDefaultValue;
+            }
+        }
+
+        if (columnDefaultValue.contains("\"") || columnDefaultValue.contains("'")) {
             return columnDefaultValue;
         }
 
@@ -280,10 +327,18 @@ public class MysqlBoostHelper {
             return columnDefaultValue;
         }
 
-        String columnTypeLowerCase = StringUtils.toLowerCase(columnType);
+        //获取移除()的columnType
+        int index = columnType.indexOf("(");
+        String resolvedColumnType = columnType;
+        if (index != -1) {
+            resolvedColumnType = columnType.substring(0, index);
+        }
+        String columnTypeLowerCase = StringUtils.toLowerCase(resolvedColumnType);
         if (columnTypeLowerCase.contains("int") || columnTypeLowerCase.equals("char")
                 || columnTypeLowerCase.equals("decimal") || columnTypeLowerCase.equals("double")
                 || columnTypeLowerCase.equals("float") || columnTypeLowerCase.equals("varchar")
+                || columnTypeLowerCase.equals("time") || columnTypeLowerCase.equals("year")
+                || columnTypeLowerCase.equals("enum")
         ) {
             return String.format("'%s'", columnDefaultValue);
         }
