@@ -2,6 +2,7 @@ package com.joker17.excel2mysql.core;
 
 import com.alibaba.excel.EasyExcel;
 import com.joker17.excel2mysql.constants.Excel2MysqlConstants;
+import com.joker17.excel2mysql.db.DataSourceUtils;
 import com.joker17.excel2mysql.db.JdbcUtils;
 import com.joker17.excel2mysql.enums.AutoModeEnum;
 import com.joker17.excel2mysql.enums.ColumnKeyTypeEnum;
@@ -17,7 +18,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
@@ -81,8 +81,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             return;
         }
 
-        Properties properties = JdbcUtils.loadProperties(new FileInputStream(dataSourcePropertiesFile));
-        DataSource dataSource = JdbcUtils.getDataSource(properties);
+        //获取data source
+        DataSource dataSource = DataSourceUtils.getDataSourceByCache(dataSourcePropertiesFile);
         JdbcTemplate jdbcTemplate = JdbcUtils.getJdbcTemplate(dataSource);
 
         //获取当前数据库名称
