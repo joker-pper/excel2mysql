@@ -1,7 +1,7 @@
 package com.joker17.excel2mysql.support;
 
 import com.joker17.excel2mysql.core.Excel2MysqlExecutorTest;
-import com.joker17.excel2mysql.db.JdbcUtils;
+import com.joker17.excel2mysql.utils.FileUtils;
 import org.junit.runners.BlockJUnit4ClassRunner;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
@@ -10,11 +10,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Properties;
 
 public class DynamicIgnoredRunner extends BlockJUnit4ClassRunner {
 
@@ -31,22 +29,16 @@ public class DynamicIgnoredRunner extends BlockJUnit4ClassRunner {
 
     protected boolean loadIsIgnoredTests() {
         File dataSourcePropertiesFile = DbTestHelper.getDataSourcePropertiesFile();
-        Properties properties = null;
-        try {
-            properties = JdbcUtils.loadProperties(new FileInputStream(dataSourcePropertiesFile));
-        } catch (IOException e) {
-        }
-
-        if (properties == null) {
+        if (!FileUtils.isFileAndExists(dataSourcePropertiesFile)) {
             logger.error("ignored tests: can't find properties {}", dataSourcePropertiesFile.getPath());
             return true;
         }
 
         Connection connection = null;
         try {
-            DataSource dataSource = JdbcUtils.getDataSource(properties);
+            DataSource dataSource = DbTestHelper.getDataSource();
             connection = dataSource.getConnection();
-        } catch (SQLException ex) {
+        } catch (SQLException | IOException ex) {
         }
 
         if (connection == null) {

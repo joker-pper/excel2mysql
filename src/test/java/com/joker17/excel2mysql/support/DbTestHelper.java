@@ -1,13 +1,12 @@
 package com.joker17.excel2mysql.support;
 
+import com.joker17.excel2mysql.db.DataSourceUtils;
 import com.joker17.excel2mysql.db.JdbcUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Properties;
 
 public class DbTestHelper {
 
@@ -20,8 +19,7 @@ public class DbTestHelper {
     }
 
     public static DataSource getDataSource() throws IOException {
-        Properties properties = JdbcUtils.loadProperties(new FileInputStream(getDataSourcePropertiesFile()));
-        return JdbcUtils.getDataSource(properties);
+        return DataSourceUtils.getDataSourceByCache(getDataSourcePropertiesFile());
     }
 
     public static JdbcTemplate getJdbcTemplate() throws IOException {

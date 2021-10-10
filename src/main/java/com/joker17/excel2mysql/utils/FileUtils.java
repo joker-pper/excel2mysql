@@ -1,24 +1,12 @@
 package com.joker17.excel2mysql.utils;
 
-import java.io.File;
+import org.springframework.util.DigestUtils;
+
+import java.io.*;
 
 public class FileUtils {
 
     private FileUtils() {
-    }
-
-    /**
-     * mkdirs
-     *
-     * @param parentFile
-     */
-    public static void mkdirs(File parentFile) {
-        if (parentFile == null) {
-            return;
-        }
-        if (!parentFile.exists() || !parentFile.isDirectory()) {
-            parentFile.mkdirs();
-        }
     }
 
     /**
@@ -62,4 +50,34 @@ public class FileUtils {
 
         return new File(sb.toString());
     }
+
+    /**
+     * 获取MD5值
+     *
+     * @param file
+     * @return
+     * @throws IOException
+     */
+    public static String md5DigestAsHex(File file) throws IOException {
+        return md5DigestAsHex(new BufferedInputStream(new FileInputStream(file)));
+    }
+
+    /**
+     * 获取MD5值
+     *
+     * @param inputStream
+     * @return
+     * @throws IOException
+     */
+    public static String md5DigestAsHex(InputStream inputStream) throws IOException {
+        try {
+            return DigestUtils.md5DigestAsHex(inputStream);
+        } finally {
+            try {
+                inputStream.close();
+            } catch (IOException e) {
+            }
+        }
+    }
+
 }
