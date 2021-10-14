@@ -1,9 +1,17 @@
 package com.joker17.excel2mysql.helper;
 
+import com.joker17.excel2mysql.db.MysqlUtils;
+import com.joker17.excel2mysql.model.MysqlColumnModel;
+import com.joker17.excel2mysql.support.DbTestHelper;
+import com.joker17.excel2mysql.utils.StringUtils;
 import org.junit.Assert;
 import org.junit.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.Arrays;
+import java.io.IOException;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.*;
 
@@ -118,4 +126,437 @@ public class Excel2MysqlHelperTest {
         Assert.assertEquals("`update_date` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'", Excel2MysqlHelper.getColumnDefinition("update_date", "datetime", "N", "", "on update CURRENT_TIMESTAMP", "更新时间"));
 
     }
+
+    private void checkGetColumnOrderPositionSqlTextMapResult(List<String> beforeColumnNameOrderList, List<String> finalColumnNameOrderList, Map<String, String> beforeColumnName2FinalColumnNameMap, Map<String, String> resultMap, Map<String, String> expectedResultMap) {
+
+        //检查结果一致
+        Assert.assertEquals(expectedResultMap.toString(), resultMap.toString());
+
+        String tableName = "t_column_order_position_test_m";
+        JdbcTemplate jdbcTemplate = null;
+        try {
+            jdbcTemplate = DbTestHelper.getJdbcTemplate();
+            MysqlUtils.execute(jdbcTemplate, String.format("DROP TABLE IF EXISTS `%s`;", tableName));
+
+            String columnDescribe = "varchar(64) NOT NULL";
+            StringBuilder stringBuilder = new StringBuilder();
+            beforeColumnNameOrderList.forEach(it -> stringBuilder.append(String.format("`%s` %s,\n", it, columnDescribe)));
+
+            String tableContent = StringUtils.removeEnd(stringBuilder.toString(), ",\n");
+            MysqlUtils.execute(jdbcTemplate, String.format("CREATE TABLE `%s` (\n" +
+                    "%s" +
+                    ") ENGINE=InnoDB;", tableName, tableContent));
+
+            Map<String, String> finalColumnName2BeforeColumnNameMap = beforeColumnName2FinalColumnNameMap.entrySet().stream()
+                    .filter(it -> it.getValue() != null).collect(Collectors.collectingAndThen(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey),
+                            Function.identity()));
+
+            //先删除列
+            List<String> dropColumnList = new ArrayList<>(8);
+            beforeColumnName2FinalColumnNameMap.forEach((beforeColumn, afterColumn) -> {
+                if (afterColumn == null) {
+                    //该字段被删除
+                    dropColumnList.add(beforeColumn);
+                }
+            });
+
+            boolean isDropAllColumn = false;
+            if (!dropColumnList.isEmpty()) {
+                isDropAllColumn = dropColumnList.size() == beforeColumnNameOrderList.size();
+                if (!isDropAllColumn) {
+                    //非删除全列时直接删除
+                    MysqlUtils.execute(jdbcTemplate, Excel2MysqlHelper.getTableDropColumnNamesSql(tableName, dropColumnList));
+                }
+            }
+
+            //处理列变更
+            JdbcTemplate finalJdbcTemplate = jdbcTemplate;
+            finalColumnNameOrderList.forEach(finalColumnNameOrder -> {
+                String sql;
+                String beforeColumnName = finalColumnName2BeforeColumnNameMap.get(finalColumnNameOrder);
+                String columnDefinition = String.format("`%s` %s", finalColumnNameOrder, columnDescribe);
+                String columnOrderPositionSqlText = resultMap.get(finalColumnNameOrder);
+                if (columnOrderPositionSqlText != null) {
+                    columnDefinition = String.format("%s %s", columnDefinition, columnOrderPositionSqlText);
+                }
+                if (beforeColumnName == null) {
+                    //新增
+                    sql = Excel2MysqlHelper.getTableAddColumnNameSql(tableName, columnDefinition);
+                } else {
+                    //变更
+                    sql = Excel2MysqlHelper.getTableChangeColumnNameSql(tableName, beforeColumnName, columnDefinition);
+                }
+                MysqlUtils.execute(finalJdbcTemplate, sql);
+            });
+
+            if (isDropAllColumn) {
+                //删除全列时最后再删除
+                MysqlUtils.execute(jdbcTemplate, Excel2MysqlHelper.getTableDropColumnNamesSql(tableName, dropColumnList));
+            }
+
+            //验证查询出的列顺序与当前的列顺序一致
+            List<MysqlColumnModel> mysqlColumnModelList = Excel2MysqlHelper.getMysqlColumnModelList(jdbcTemplate, MysqlUtils.getDatabase(jdbcTemplate), tableName);
+            Assert.assertEquals(finalColumnNameOrderList, mysqlColumnModelList.stream().map(MysqlColumnModel::getColumnName).collect(Collectors.toList()));
+        } catch (IOException e) {
+            System.err.println("get jdbc template error: " + e.getMessage());
+        } finally {
+            if (jdbcTemplate != null) {
+                MysqlUtils.execute(jdbcTemplate, String.format("DROP TABLE IF EXISTS `%s`;", tableName));
+            }
+        }
+
+    }
+
+    @Test
+    public void testGetColumnOrderPositionSqlTextMap() {
+        //新增列在最前面
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b");
+            List<String> finalColumnNameOrderList = Arrays.asList("c", "a", "b");
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnNameOrderList.forEach(it -> beforeColumnName2FinalColumnNameMap.put(it, it));
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("c", "FIRST");
+            expectedResultMap.put("a", "AFTER `c`");
+            expectedResultMap.put("b", null);
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在最前面(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b");
+            List<String> finalColumnNameOrderList = Arrays.asList("C", "A", "B");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("C", "FIRST");
+            expectedResultMap.put("A", "AFTER `C`");
+            expectedResultMap.put("B", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //调整列位置顺序(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("C", "A", "B");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("C", "FIRST");
+            expectedResultMap.put("A", "AFTER `C`");
+            expectedResultMap.put("B", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在中间位置(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("A", "B", "AA", "BB", "C");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("A", null);
+            expectedResultMap.put("B", null);
+            expectedResultMap.put("AA", "AFTER `B`");
+
+            expectedResultMap.put("BB", "AFTER `AA`");
+            expectedResultMap.put("C", "AFTER `BB`");
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在后面位置(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("A", "B", "C", "AA", "BB");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("A", null);
+            expectedResultMap.put("B", null);
+            expectedResultMap.put("C", null);
+/*            expectedResultMap.put("AA", "AFTER `C`");
+            expectedResultMap.put("BB", "AFTER `AA`");*/
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在后面位置(之前列名变更为新的,且顺序变更)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "c", "b");
+            List<String> finalColumnNameOrderList = Arrays.asList("A", "B", "C", "AA", "BB");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("A", null);
+            expectedResultMap.put("B", "AFTER `A`");
+            expectedResultMap.put("C", "AFTER `B`");
+/*            expectedResultMap.put("AA", "AFTER `C`");
+            expectedResultMap.put("BB", "AFTER `AA`");*/
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在后面位置(之前列名变更为新的,且顺序变更及列移除)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "c", "b", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("A", "B", "C", "AA", "BB");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+            beforeColumnName2FinalColumnNameMap.put("d", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("A", null);
+            expectedResultMap.put("B", "AFTER `A`");
+            expectedResultMap.put("C", "AFTER `B`");
+/*            expectedResultMap.put("AA", "AFTER `C`");
+            expectedResultMap.put("BB", "AFTER `AA`");*/
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在前面和后面位置(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "c", "b");
+            List<String> finalColumnNameOrderList = Arrays.asList("CC", "A", "B", "C", "AA", "BB");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("CC", "FIRST");
+            expectedResultMap.put("A", "AFTER `CC`");
+
+            //当前位置未变化,都处于第三个
+            expectedResultMap.put("B", null);
+
+            expectedResultMap.put("C", "AFTER `B`");
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在前面和后面位置(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("CC", "A", "B", "C", "AA", "BB");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("CC", "FIRST");
+            expectedResultMap.put("A", "AFTER `CC`");
+            expectedResultMap.put("B", null);
+            expectedResultMap.put("C", null);
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //新增列在前面和中间位置(之前列名变更为新的)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("CC", "A", "B", "AA", "BB", "C");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("CC", "FIRST");
+            expectedResultMap.put("A", "AFTER `CC`");
+            expectedResultMap.put("B", null);
+            expectedResultMap.put("AA", "AFTER `B`");
+            expectedResultMap.put("BB", "AFTER `AA`");
+            expectedResultMap.put("C", "AFTER `BB`");
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+
+        //倒数第二列一致
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d", "e");
+            List<String> finalColumnNameOrderList = Arrays.asList("CC", "e", "B", "AA", "BB", "A", "d", "C");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "A");
+            beforeColumnName2FinalColumnNameMap.put("b", "B");
+            beforeColumnName2FinalColumnNameMap.put("c", "C");
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+            beforeColumnName2FinalColumnNameMap.put("e", "e");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("CC", "FIRST");
+            expectedResultMap.put("e", "AFTER `CC`");
+            expectedResultMap.put("B", "AFTER `e`");
+            expectedResultMap.put("AA", "AFTER `B`");
+            expectedResultMap.put("BB", "AFTER `AA`");
+
+            expectedResultMap.put("A", "AFTER `BB`");
+            expectedResultMap.put("d", "AFTER `A`");
+
+            expectedResultMap.put("C", "AFTER `d`");
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+
+        //之前列全部被删除
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("AA", "BB", "CC");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", null);
+            beforeColumnName2FinalColumnNameMap.put("b", null);
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+            expectedResultMap.put("CC", null);
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+
+        //之前列只留下一个(在最前面)
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("b", "AA", "BB", "CC");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", null);
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("b", null);
+            expectedResultMap.put("AA", null);
+            expectedResultMap.put("BB", null);
+            expectedResultMap.put("CC", null);
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //之前列只留下一个(在最后面)
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("AA", "BB", "CC", "b");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", null);
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("AA", "FIRST");
+            expectedResultMap.put("BB", "AFTER `AA`");
+            expectedResultMap.put("CC", "AFTER `BB`");
+            expectedResultMap.put("b", "AFTER `CC`");
+
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //之前列只留下一个(在中间): 字段b处于第二个位置未变化,后两个字段为之后[顺序]新增
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("AA", "b", "BB", "CC");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", null);
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("AA", "FIRST");
+            expectedResultMap.put("b", null);
+            expectedResultMap.put("BB", null);
+            expectedResultMap.put("CC", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        //之前列只留下一个(在中间): 字段b处于倒数第二个位置
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c");
+            List<String> finalColumnNameOrderList = Arrays.asList("AA", "BB", "b", "CC");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", null);
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("AA", "FIRST");
+            expectedResultMap.put("BB", "AFTER `AA`");
+            expectedResultMap.put("b", "AFTER `BB`");
+
+            //CC为之后[顺序]新增
+            expectedResultMap.put("CC", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+    }
+
 }

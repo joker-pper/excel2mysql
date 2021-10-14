@@ -1,5 +1,6 @@
 package com.joker17.excel2mysql.helper;
 
+import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.support.ExcelTypeEnum;
 import com.joker17.excel2mysql.constants.Excel2MysqlConstants;
 import com.joker17.excel2mysql.enums.ColumnKeyTypeEnum;
@@ -8,7 +9,9 @@ import com.joker17.excel2mysql.model.MysqlColumnModel;
 import com.joker17.excel2mysql.utils.StringUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.io.File;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class Excel2MysqlHelper {
@@ -485,6 +488,17 @@ public class Excel2MysqlHelper {
         return resultList;
     }
 
+    /**
+     * 解析excel数据
+     *
+     * @param inExcelFile
+     * @param excelType
+     * @return
+     */
+    public static List<Excel2MysqlModel> getExcel2MysqlModelList(File inExcelFile, String excelType) {
+        return EasyExcel.read(inExcelFile).excelType(getExcelTypeEnum(excelType))
+                .head(Excel2MysqlModel.class).sheet().doReadSync();
+    }
 
     /**
      * 获取列定义内容是否发生改变
@@ -517,4 +531,141 @@ public class Excel2MysqlHelper {
 
         return false;
     }
+
+    /**
+     * 获取最后字段的列排序位置关系
+     *
+     * @param beforeColumnNameOrderList
+     * @param finalColumnNameOrderList
+     * @param beforeColumnName2FinalColumnNameMap
+     * @return
+     */
+    public static Map<String, String> getColumnOrderPositionSqlTextMap(List<String> beforeColumnNameOrderList, List<String> finalColumnNameOrderList, Map<String, String> beforeColumnName2FinalColumnNameMap) {
+        if (beforeColumnNameOrderList.isEmpty()) {
+            throw new UnsupportedOperationException("beforeColumnNameOrderList must be not empty");
+        }
+        if (finalColumnNameOrderList.isEmpty()) {
+            throw new UnsupportedOperationException("finalColumnNameOrderList must be not empty");
+        }
+
+        Map<String, String> finalColumnName2BeforeColumnNameMap = beforeColumnName2FinalColumnNameMap.entrySet().stream()
+                .filter(it -> it.getValue() != null).collect(Collectors.collectingAndThen(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey),
+                        Function.identity()));
+
+        int finalColumnNameOrderListSize = finalColumnNameOrderList.size();
+
+        int wholeNewAddedColumnStartIndex = getWholeNewAddedColumnStartIndex(finalColumnNameOrderList, finalColumnName2BeforeColumnNameMap);
+
+        //获取按最终列顺序的结果
+        Map<String, String> resultMap = new LinkedHashMap<>(finalColumnNameOrderListSize);
+        for (int i = 0; i < finalColumnNameOrderListSize; i++) {
+            String finalOrderColumnName = finalColumnNameOrderList.get(i);
+            String result = getColumnOrderPositionSqlText(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, finalColumnName2BeforeColumnNameMap, i, wholeNewAddedColumnStartIndex);
+            resultMap.put(finalOrderColumnName, result);
+        }
+        return resultMap;
+    }
+
+    /**
+     * 通过表的最后字段列表和最后字段对应之前字段映射获取最后完全新增列的开始索引位置(从该位置开始时则为顺序新增),未找到时则返回-1
+     *
+     * @param finalColumnNameOrderList            最后字段列表
+     * @param finalColumnName2BeforeColumnNameMap 最后字段对应之前字段映射
+     * @return
+     */
+    private static int getWholeNewAddedColumnStartIndex(List<String> finalColumnNameOrderList,
+                                                        Map<String, String> finalColumnName2BeforeColumnNameMap) {
+        int finalColumnNameOrderListSize = finalColumnNameOrderList.size();
+        //默认为-1
+        int position = -1;
+        //倒序查找
+        for (int i = finalColumnNameOrderListSize - 1; i >= 0; i--) {
+            String finalColumnNameOrder = finalColumnNameOrderList.get(i);
+            String beforeColumnName = finalColumnName2BeforeColumnNameMap.get(finalColumnNameOrder);
+            if (beforeColumnName != null) {
+                //若该列之前便存在时停止
+                break;
+            }
+            position = i;
+        }
+        return position;
+    }
+
+    /**
+     * 获取最后字段列表的指定索引位置的列排序位置的配置
+     *
+     * @param beforeColumnNameOrderList
+     * @param finalColumnNameOrderList
+     * @param beforeColumnName2FinalColumnNameMap
+     * @param finalColumnName2BeforeColumnNameMap
+     * @param index
+     * @param wholeNewAddedColumnStartIndex
+     * @return
+     */
+    private static String getColumnOrderPositionSqlText(List<String> beforeColumnNameOrderList, List<String> finalColumnNameOrderList, Map<String, String> beforeColumnName2FinalColumnNameMap,
+                                                        Map<String, String> finalColumnName2BeforeColumnNameMap, int index, int wholeNewAddedColumnStartIndex) {
+        if (wholeNewAddedColumnStartIndex != -1 && index >= wholeNewAddedColumnStartIndex) {
+            //存在当前字段在之前字段之后完全新增的开始索引位置且当前索引大于等于该值时则为后续完全新增字段(从该位置开始时为顺序新增),默认返回null
+            return null;
+        }
+
+        String finalOrderColumnName = finalColumnNameOrderList.get(index);
+
+        //获取同位置的之前列
+        String beforeOrderColumnName = index < beforeColumnNameOrderList.size() ? beforeColumnNameOrderList.get(index) : null;
+        if (index == 0) {
+            //第一个时
+            if (StringUtils.equals(beforeOrderColumnName, finalOrderColumnName)) {
+                //字段名称未变化
+                return null;
+            }
+
+            //获取之前字段在当前的名称,当一样时未变化返回null
+            String beforeOrderColumnNameInAfterName = beforeColumnName2FinalColumnNameMap.get(beforeOrderColumnName);
+            if (StringUtils.equals(beforeOrderColumnNameInAfterName, finalOrderColumnName)) {
+                //只是变更名称,属于同一列并未变化位置
+                return null;
+            }
+
+            //当前列在之前表中存在且在之后只剩下该列时(其他列被移除后该列便处于第一位),返回null
+            if (finalColumnName2BeforeColumnNameMap.get(finalOrderColumnName) != null && beforeColumnName2FinalColumnNameMap.values()
+                    .stream().filter(Objects::nonNull).count() == 1) {
+                //beforeColumnName2FinalColumnNameMap中只找到一个值不为空的说明只剩下一列
+                return null;
+            }
+
+            //最后返回FIRST
+            return "FIRST";
+        }
+
+        if (beforeOrderColumnName != null) {
+            //获取之前字段在当前的名称
+            String beforeOrderColumnNameInAfterName = beforeColumnName2FinalColumnNameMap.get(beforeOrderColumnName);
+            if (StringUtils.equals(beforeOrderColumnNameInAfterName, finalOrderColumnName)) {
+                //当前位置未变化
+                return null;
+            }
+        }
+
+        //如果当前字段在之前存在且前一列的字段一致时,则认为(相对)位置未发生变化(注: 以AFTER 前一列 定位)
+        String finalOrderColumnNameInBeforeName = finalColumnName2BeforeColumnNameMap.get(finalOrderColumnName);
+        if (finalOrderColumnNameInBeforeName != null) {
+            int beforeIndex = beforeColumnNameOrderList.indexOf(finalOrderColumnNameInBeforeName);
+            //当之前同名称列处于第一个或者找不到时不处理
+            if (beforeIndex > 0) {
+                //获取之前同名称列的前一列
+                String finalOrderColumnNameInBeforeNamePrevious = beforeColumnNameOrderList.get(beforeIndex - 1);
+                //获取当前列的前一列
+                String finalOrderColumnNamePrevious = finalColumnNameOrderList.get(index - 1);
+                if (StringUtils.equals(finalOrderColumnNameInBeforeNamePrevious, finalOrderColumnNamePrevious)
+                        || StringUtils.equals(beforeColumnName2FinalColumnNameMap.get(finalOrderColumnNameInBeforeNamePrevious), finalOrderColumnNamePrevious)) {
+                    return null;
+                }
+            }
+        }
+
+        //默认处于当前排序字段的前一个之后
+        return String.format("AFTER `%s`", finalColumnNameOrderList.get(index - 1));
+    }
+
 }
