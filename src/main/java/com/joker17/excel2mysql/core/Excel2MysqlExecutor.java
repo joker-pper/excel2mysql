@@ -1,6 +1,5 @@
 package com.joker17.excel2mysql.core;
 
-import com.alibaba.excel.EasyExcel;
 import com.joker17.excel2mysql.constants.Excel2MysqlConstants;
 import com.joker17.excel2mysql.db.DataSourceUtils;
 import com.joker17.excel2mysql.db.JdbcUtils;
@@ -74,8 +73,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         String engine = StringUtils.defaultIfEmpty(StringUtils.trimToNull(dumpParam.getEngine()), Excel2MysqlConstants.INNODB_ENGINE);
 
         //解析excel数据
-        List<Excel2MysqlModel> excel2MysqlModelList = EasyExcel.read(inExcelFile).excelType(Excel2MysqlHelper.getExcelTypeEnum(excelType))
-                .head(Excel2MysqlModel.class).sheet().doReadSync();
+        List<Excel2MysqlModel> excel2MysqlModelList = Excel2MysqlHelper.getExcel2MysqlModelList(inExcelFile, excelType);
         if (excel2MysqlModelList == null || excel2MysqlModelList.isEmpty()) {
             MAIN_LOG.warn("read excel empty data list, return ...");
             return;
@@ -199,9 +197,9 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
 
             Map<String, MysqlColumnModel> beforeColumnName2MysqlColumnModelMap = mysqlColumnModelList.stream().collect(Collectors.toMap(MysqlColumnModel::getColumnName, Function.identity()));
             Map<String, Excel2MysqlModel> beforeColumnName2Excel2MysqlModelMap = new HashMap<>(16);
-            Map<Excel2MysqlModel, MysqlColumnModel> primaryKeyExcel2Mysql2MysqlColumnModelMap = new LinkedHashMap<>(4);
+            Map<Excel2MysqlModel, MysqlColumnModel> finalPrimaryKeyColumnModel2MysqlColumnModelMap = new LinkedHashMap<>(4);
 
-            List<String> newUniqueKeyListList = new ArrayList<>(8);
+            List<String> newUniqueKeyList = new ArrayList<>(8);
             List<String> dropColumnNames = new ArrayList<>(8);
             List<String> addColumnNameSqlList = new ArrayList<>(16);
             List<String> modifyColumnNameSqlList = new ArrayList<>(16);
@@ -238,7 +236,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                     switch (columnKeyTypeEnum) {
                         case UNIQUE_KEY:
                             if (beforeColumnKeyTypeEnum != ColumnKeyTypeEnum.UNIQUE_KEY && beforeColumnKeyTypeEnum != ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY) {
-                                newUniqueKeyListList.add(finalColumnName);
+                                newUniqueKeyList.add(finalColumnName);
                             }
                             break;
                         default:
@@ -248,7 +246,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
 
                     if (columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY || columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY) {
                         //为PK列时(后面进行处理)
-                        primaryKeyExcel2Mysql2MysqlColumnModelMap.put(tableExcel2MysqlModel, mysqlColumnModel);
+                        finalPrimaryKeyColumnModel2MysqlColumnModelMap.put(tableExcel2MysqlModel, mysqlColumnModel);
                         return;
                     }
 
@@ -272,11 +270,11 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             });
 
             //处理pk
-            lastExecuteSqlList.addAll(getUpdateAutoModePrimaryKeySqlList(tableName, dropColumnNames, mysqlColumnModelList, primaryKeyExcel2Mysql2MysqlColumnModelMap, beforeColumnName2Excel2MysqlModelMap));
+            lastExecuteSqlList.addAll(getUpdateAutoModePrimaryKeySqlList(tableName, dropColumnNames, mysqlColumnModelList, finalPrimaryKeyColumnModel2MysqlColumnModelMap, beforeColumnName2Excel2MysqlModelMap));
 
             //处理唯一key索引
-            if (!newUniqueKeyListList.isEmpty()) {
-                newUniqueKeyListList.forEach(uniqueKey -> lastExecuteSqlList.add(Excel2MysqlHelper.getTableAddUniqueColumnIndexSql(tableName, uniqueKey)));
+            if (!newUniqueKeyList.isEmpty()) {
+                newUniqueKeyList.forEach(uniqueKey -> lastExecuteSqlList.add(Excel2MysqlHelper.getTableAddUniqueColumnIndexSql(tableName, uniqueKey)));
             }
 
             List<String> toExecuteSqlList = new ArrayList<>(64);
@@ -313,26 +311,28 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
      *
      * @param tableName
      * @param dropColumnNames
-     * @param mysqlColumnModelList
-     * @param primaryKeyExcel2Mysql2MysqlColumnModelMap
+     * @param mysqlColumnModelList                           之前列的信息
+     * @param finalPrimaryKeyColumnModel2MysqlColumnModelMap 最终PK列所对应之前列的信息Map
      * @param beforeColumnName2Excel2MysqlModelMap
      * @return
      */
-    private List<String> getUpdateAutoModePrimaryKeySqlList(String tableName, List<String> dropColumnNames, List<MysqlColumnModel> mysqlColumnModelList, Map<Excel2MysqlModel, MysqlColumnModel> primaryKeyExcel2Mysql2MysqlColumnModelMap, Map<String, Excel2MysqlModel> beforeColumnName2Excel2MysqlModelMap) {
-        if (primaryKeyExcel2Mysql2MysqlColumnModelMap.isEmpty()) {
-            //不存在时忽略
+    private List<String> getUpdateAutoModePrimaryKeySqlList(String tableName, List<String> dropColumnNames, List<MysqlColumnModel> mysqlColumnModelList, Map<Excel2MysqlModel, MysqlColumnModel> finalPrimaryKeyColumnModel2MysqlColumnModelMap, Map<String, Excel2MysqlModel> beforeColumnName2Excel2MysqlModelMap) {
+        if (finalPrimaryKeyColumnModel2MysqlColumnModelMap.isEmpty()) {
+            //不存在时PK变更的配置时忽略
             return Collections.emptyList();
         }
 
         //处理pk
+
+        //获取之前的主键列的列表
         List<MysqlColumnModel> beforePrimaryKeyMysqlColumnModelList = mysqlColumnModelList.stream().filter(mysqlColumnModel -> {
             ColumnKeyTypeEnum columnKeyTypeEnum = MysqlBoostHelper.getColumnKeyType(mysqlColumnModel.getColumnKeyType());
             return columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_KEY || columnKeyTypeEnum == ColumnKeyTypeEnum.PRIMARY_AND_UNIQUE_KEY;
         }).collect(Collectors.toList());
 
+        //若要处理PK时 检查之前的主键列必须存在于当前要更新列的配置中
         beforePrimaryKeyMysqlColumnModelList.forEach(mysqlColumnModel -> {
             String columnName = mysqlColumnModel.getColumnName();
-            //检查主键列在要更新列的配置中
             if (beforeColumnName2Excel2MysqlModelMap.get(columnName) == null) {
                 throw new IllegalArgumentException(String.format("table `%s` has error config: not found primary key `%s` config in excel.", tableName, columnName));
             }
@@ -342,9 +342,11 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         List<String> primaryKeyList = new ArrayList<>(4);
         Set<String> changedAutoIncrementColumns = new HashSet<>(4);
         Set<String> changedPkColumns = new HashSet<>(4);
-        Map<String, String> primaryKeySqlMap = new LinkedHashMap<>(4);
 
-        primaryKeyExcel2Mysql2MysqlColumnModelMap.forEach((primaryKeyExcel2MysqlModel, mysqlColumnModel) -> {
+        List<String> beforeSqlList = new ArrayList<>(8);
+        List<String> afterSqlList = new ArrayList<>(8);
+
+        finalPrimaryKeyColumnModel2MysqlColumnModelMap.forEach((primaryKeyExcel2MysqlModel, mysqlColumnModel) -> {
             //获取最终的字段名称
             String finalColumnName = Excel2MysqlHelper.getFinalColumnName(primaryKeyExcel2MysqlModel.getColumnName());
             //获取当前字段定义的描述
@@ -427,8 +429,13 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             }
 
             if (beforeSql != null) {
-                primaryKeySqlMap.put(beforeSql, afterSql);
+                beforeSqlList.add(beforeSql);
             }
+
+            if (afterSql != null) {
+                afterSqlList.add(afterSql);
+            }
+
         });
 
         //添加pk索引sql
@@ -438,21 +445,18 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             //之前不存在pk索引 / 之前pk列全被移除时
 
             //先处理列变更
-            primaryKeySqlMap.keySet().forEach(beforeSql -> sqlList.add(beforeSql));
+            sqlList.addAll(beforeSqlList);
 
             //进行添加pk索引
             sqlList.add(addPrimaryKeyIndexSql);
 
             //再处理后续sql(e.g: 修改列为自增)
-            primaryKeySqlMap.values().forEach(afterSql -> {
-                if (afterSql != null) {
-                    sqlList.add(afterSql);
-                }
-            });
+            sqlList.addAll(afterSqlList);
+
 
         } else {
             //先处理列变更
-            primaryKeySqlMap.keySet().forEach(beforeSql -> sqlList.add(beforeSql));
+            sqlList.addAll(beforeSqlList);
 
             if (!changedAutoIncrementColumns.isEmpty() || primaryKeyList.size() != beforePrimaryKeyMysqlColumnModelList.size() || !changedPkColumns.isEmpty()) {
                 //进行删除之前的pk索引 (自增列变更 / 主键列个数变更 / 主键列新增、更换)
@@ -463,11 +467,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             }
 
             //再处理后续sql(若存在修改为自增等)
-            primaryKeySqlMap.values().forEach(afterSql -> {
-                if (afterSql != null) {
-                    sqlList.add(afterSql);
-                }
-            });
+            sqlList.addAll(afterSqlList);
+
         }
         return sqlList;
     }
