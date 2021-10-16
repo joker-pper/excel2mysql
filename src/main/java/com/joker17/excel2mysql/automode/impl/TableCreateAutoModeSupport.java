@@ -31,8 +31,7 @@ public class TableCreateAutoModeSupport extends AbstractTableAutoModeSupport {
     }
 
     @Override
-    public void execute(TableAutoModeSupportOptions options) {
-        JdbcTemplate jdbcTemplate = options.getJdbcTemplate();
+    public void execute(JdbcTemplate jdbcTemplate, TableAutoModeSupportOptions options) {
         String database = options.getDatabase();
         String tableName = options.getTableName();
         String engine = options.getEngine();

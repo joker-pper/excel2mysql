@@ -394,7 +394,7 @@ public class Excel2MysqlHelper {
         int size = columnNames.size();
         sb.append(" ");
         for (int i = 0; i < size; i++) {
-            sb.append(String.format("DROP `%s`", columnNames.get(i)));
+            sb.append(String.format("DROP COLUMN `%s`", columnNames.get(i)));
             if (i != size - 1) {
                 sb.append(", ");
             }

@@ -21,7 +21,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
@@ -86,7 +85,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
 
         //获取当前数据库名称
         String database = MysqlUtils.getDatabase(jdbcTemplate);
-        if (database == null) {
+        if (StringUtils.isEmpty(database)) {
             throw new IllegalArgumentException("invalid database");
         }
 
@@ -128,8 +127,8 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
                 //匹配时进行执行操作
                 boolean tableExists = existsTableNameList.contains(tableName);
                 TableAutoModeSupportOptions autoModeOptions = TableAutoModeSupportOptions.builder().database(database).tableName(tableName).engine(engine).tableExists(tableExists)
-                        .jdbcTemplate(jdbcTemplate).tableExcel2MysqlModelList(tableExcel2MysqlModelList).build();
-                tableAutoModeSupport.execute(autoModeOptions);
+                        .tableExcel2MysqlModelList(tableExcel2MysqlModelList).build();
+                tableAutoModeSupport.execute(jdbcTemplate, autoModeOptions);
             }
         });
     }

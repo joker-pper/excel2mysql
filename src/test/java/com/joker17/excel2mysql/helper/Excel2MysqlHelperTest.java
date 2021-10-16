@@ -13,8 +13,6 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.*;
-
 public class Excel2MysqlHelperTest {
 
 
@@ -87,8 +85,8 @@ public class Excel2MysqlHelperTest {
         Assert.assertEquals("ALTER TABLE `user` MODIFY COLUMN `id` bigint NOT NULL AUTO_INCREMENT;", Excel2MysqlHelper.getTableModifyColumnNameSql("user", "`id` bigint NOT NULL AUTO_INCREMENT"));
         Assert.assertEquals("ALTER TABLE `user` CHANGE COLUMN `user_id` `id` bigint NOT NULL AUTO_INCREMENT;", Excel2MysqlHelper.getTableChangeColumnNameSql("user", "user_id", "`id` bigint NOT NULL AUTO_INCREMENT"));
 
-        Assert.assertEquals("ALTER TABLE `user` DROP `age`;", Excel2MysqlHelper.getTableDropColumnNamesSql("user", Arrays.asList("age")));
-        Assert.assertEquals("ALTER TABLE `user` DROP `age`, DROP `remarks`;", Excel2MysqlHelper.getTableDropColumnNamesSql("user", Arrays.asList("age", "remarks")));
+        Assert.assertEquals("ALTER TABLE `user` DROP COLUMN `age`;", Excel2MysqlHelper.getTableDropColumnNamesSql("user", Arrays.asList("age")));
+        Assert.assertEquals("ALTER TABLE `user` DROP COLUMN `age`, DROP COLUMN `remarks`;", Excel2MysqlHelper.getTableDropColumnNamesSql("user", Arrays.asList("age", "remarks")));
     }
 
     @Test
