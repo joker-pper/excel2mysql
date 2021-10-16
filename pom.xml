@@ -20,6 +20,7 @@
         <HikariCP.version>3.2.0</HikariCP.version>
         <spring-jdbc.version>5.1.9.RELEASE</spring-jdbc.version>
         <slf4j-simple.version>1.7.25</slf4j-simple.version>
+        <lombok.version>1.16.22</lombok.version>
         <jacoco.version>0.8.6</jacoco.version>
         <jacoco.path>${project.build.directory}/jacoco.exec</jacoco.path>
         <jacoco.skip>false</jacoco.skip>
@@ -67,6 +68,12 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j-simple.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
         </dependency>
 
         <dependency>

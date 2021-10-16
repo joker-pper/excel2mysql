@@ -557,6 +557,102 @@ public class Excel2MysqlHelperTest {
             expectedResultMap.put("CC", null);
             checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
         }
+
+        /** 几组变换字段位置的测试 **/
+
+        {
+
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("a", "c", "b", "d");
+
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "a");
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", "c");
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            //位置未变
+            expectedResultMap.put("a", null);
+            expectedResultMap.put("c", "AFTER `a`");
+            expectedResultMap.put("b", "AFTER `c`");
+            //位置未变
+            expectedResultMap.put("d", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("c", "a", "b", "d");
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "a");
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", "c");
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("c", "FIRST");
+            expectedResultMap.put("a", "AFTER `c`");
+            //b本身就处于a之后所以为null
+            expectedResultMap.put("b", null);
+            //d位置未变化
+            expectedResultMap.put("d", null);
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("a", "b", "d", "c");
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "a");
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", "c");
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("a", null);
+            expectedResultMap.put("b", null);
+            expectedResultMap.put("d", "AFTER `b`");
+            expectedResultMap.put("c", "AFTER `d`");
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        /** 移除中间部分的列 **/
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("a", "b", "d");
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "a");
+            beforeColumnName2FinalColumnNameMap.put("b", "b");
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("a", null);
+            expectedResultMap.put("b", null);
+            expectedResultMap.put("d", "AFTER `b`");
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
+
+        {
+            List<String> beforeColumnNameOrderList = Arrays.asList("a", "b", "c", "d");
+            List<String> finalColumnNameOrderList = Arrays.asList("a", "d");
+            Map<String, String> beforeColumnName2FinalColumnNameMap = new HashMap<>(16);
+            beforeColumnName2FinalColumnNameMap.put("a", "a");
+            beforeColumnName2FinalColumnNameMap.put("b",  null);
+            beforeColumnName2FinalColumnNameMap.put("c", null);
+            beforeColumnName2FinalColumnNameMap.put("d", "d");
+
+            Map<String, String> resultMap = Excel2MysqlHelper.getColumnOrderPositionSqlTextMap(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap);
+            Map<String, String> expectedResultMap = new LinkedHashMap<>(16);
+            expectedResultMap.put("a", null);
+            expectedResultMap.put("d", "AFTER `a`");
+            checkGetColumnOrderPositionSqlTextMapResult(beforeColumnNameOrderList, finalColumnNameOrderList, beforeColumnName2FinalColumnNameMap, resultMap, expectedResultMap);
+        }
     }
 
 }
