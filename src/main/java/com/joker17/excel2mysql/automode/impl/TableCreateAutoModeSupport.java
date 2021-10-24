@@ -43,15 +43,12 @@ public class TableCreateAutoModeSupport extends AbstractTableAutoModeSupport {
 
             MAIN_LOG.info("database {} create table `{}` start", database, tableName);
             MAIN_LOG.info("database {} create table `{}` sql - {}", database, tableName, createSql);
-
             //执行sql
             MysqlUtils.execute(jdbcTemplate, createSql);
-
             MAIN_LOG.info("database {} create table `{}` end", database, tableName);
-
         } else {
             //已存在的表忽略
-            MAIN_LOG.warn("database {} has already exist table `{}` ...", database, tableName);
+            MAIN_LOG.warn("database {} ignore create table `{}`: has already exist.", database, tableName);
         }
     }
 }

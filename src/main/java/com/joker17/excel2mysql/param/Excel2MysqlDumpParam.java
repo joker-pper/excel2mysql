@@ -1,7 +1,13 @@
 package com.joker17.excel2mysql.param;
 
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
+@Setter
+@Getter
+@ToString
 public class Excel2MysqlDumpParam {
 
     /**
@@ -17,7 +23,7 @@ public class Excel2MysqlDumpParam {
     private String inFilePath;
 
     /**
-     * 文件名称,不包含后缀
+     * 文件名称,后缀可选
      */
     @Parameter(names = {"-file-name"}, required = true, description = "in excel file name")
     private String fileName;
@@ -58,7 +64,7 @@ public class Excel2MysqlDumpParam {
     private String autoMode;
 
     /**
-     * 引擎
+     * 建表引擎
      */
     @Parameter(names = {"-engine"}, description = "table engine, default value InnoDB")
     private String engine;
@@ -66,83 +72,4 @@ public class Excel2MysqlDumpParam {
     @Parameter(names = {"--help", "--h"}, help = true, order = 5)
     private boolean help;
 
-    public String getDataSourceProperties() {
-        return dataSourceProperties;
-    }
-
-    public void setDataSourceProperties(String dataSourceProperties) {
-        this.dataSourceProperties = dataSourceProperties;
-    }
-
-    public String getInFilePath() {
-        return inFilePath;
-    }
-
-    public void setInFilePath(String inFilePath) {
-        this.inFilePath = inFilePath;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
-
-    public String getExcelType() {
-        return excelType;
-    }
-
-    public void setExcelType(String excelType) {
-        this.excelType = excelType;
-    }
-
-    public String getFilterTable() {
-        return filterTable;
-    }
-
-    public void setFilterTable(String filterTable) {
-        this.filterTable = filterTable;
-    }
-
-    public boolean isExcludeTableMode() {
-        return excludeTableMode;
-    }
-
-    public void setExcludeTableMode(boolean excludeTableMode) {
-        this.excludeTableMode = excludeTableMode;
-    }
-
-    public boolean isCheckTableSchema() {
-        return checkTableSchema;
-    }
-
-    public void setCheckTableSchema(boolean checkTableSchema) {
-        this.checkTableSchema = checkTableSchema;
-    }
-
-    public String getAutoMode() {
-        return autoMode;
-    }
-
-    public void setAutoMode(String autoMode) {
-        this.autoMode = autoMode;
-    }
-
-    public String getEngine() {
-        return engine;
-    }
-
-    public void setEngine(String engine) {
-        this.engine = engine;
-    }
-
-    public boolean isHelp() {
-        return help;
-    }
-
-    public void setHelp(boolean help) {
-        this.help = help;
-    }
 }

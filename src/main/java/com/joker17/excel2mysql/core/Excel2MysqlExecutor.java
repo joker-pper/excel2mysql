@@ -1,18 +1,18 @@
 package com.joker17.excel2mysql.core;
 
-import com.joker17.excel2mysql.automode.AbstractTableAutoModeSupport;
+import com.joker17.excel2mysql.automode.TableAutoModeSupport;
 import com.joker17.excel2mysql.automode.TableAutoModeSupportFactory;
 import com.joker17.excel2mysql.automode.TableAutoModeSupportOptions;
 import com.joker17.excel2mysql.constants.Excel2MysqlConstants;
 import com.joker17.excel2mysql.db.DataSourceUtils;
 import com.joker17.excel2mysql.db.JdbcUtils;
+import com.joker17.excel2mysql.db.MysqlUtils;
 import com.joker17.excel2mysql.enums.AutoModeEnum;
+import com.joker17.excel2mysql.helper.Excel2MysqlHelper;
 import com.joker17.excel2mysql.helper.MysqlBoostHelper;
 import com.joker17.excel2mysql.model.Excel2MysqlModel;
 import com.joker17.excel2mysql.param.Excel2MysqlDumpParam;
-import com.joker17.excel2mysql.helper.Excel2MysqlHelper;
 import com.joker17.excel2mysql.utils.FileUtils;
-import com.joker17.excel2mysql.db.MysqlUtils;
 import com.joker17.excel2mysql.utils.StringUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -117,7 +117,7 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
         }
 
         //获取tableAutoModeSupport
-        AbstractTableAutoModeSupport tableAutoModeSupport = TableAutoModeSupportFactory.getTableAutoModeSupport(autoModeEnum);
+        TableAutoModeSupport tableAutoModeSupport = TableAutoModeSupportFactory.getTableAutoModeSupport(autoModeEnum);
 
         //获取当前已存在的表
         List<String> existsTableNameList = MysqlUtils.getTableNameList(jdbcTemplate);
@@ -126,9 +126,12 @@ public class Excel2MysqlExecutor extends AbstractExcel2MysqlExecutor {
             if (isMatchResolve) {
                 //匹配时进行执行操作
                 boolean tableExists = existsTableNameList.contains(tableName);
-                TableAutoModeSupportOptions autoModeOptions = TableAutoModeSupportOptions.builder().database(database).tableName(tableName).engine(engine).tableExists(tableExists)
+                TableAutoModeSupportOptions autoModeOptions = TableAutoModeSupportOptions.builder().database(database).tableName(tableName).engine(engine)
+                        .tableExists(tableExists)
                         .tableExcel2MysqlModelList(tableExcel2MysqlModelList).build();
                 tableAutoModeSupport.execute(jdbcTemplate, autoModeOptions);
+            } else {
+                MAIN_LOG.info("database {} table `{}` not matched, continue ...", database, tableName);
             }
         });
     }

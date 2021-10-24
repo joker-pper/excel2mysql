@@ -24,10 +24,30 @@ public class MysqlBoostHelper {
         if (filterTableNames == null || filterTableNames.isEmpty()) {
             return true;
         }
-        boolean contains = filterTableNames.contains(tableName);
+        boolean contains = isMatches(filterTableNames, tableName);
         return exclude ? !contains : contains;
     }
 
+    /**
+     * 获取是否匹配到text
+     *
+     * @param filterTexts
+     * @param text
+     * @return
+     */
+    public static boolean isMatches(Collection<String> filterTexts, String text) {
+        if (filterTexts.contains(text)) {
+            //直接包含时
+            return true;
+        }
+        for (String filterText : filterTexts) {
+            if (text.matches(filterText)) {
+                //正则匹配时
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * 判断列是否不为空

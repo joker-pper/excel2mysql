@@ -44,7 +44,6 @@ public class TableUpdateAutoModeSupport extends AbstractTableAutoModeSupport {
         String engine = options.getEngine();
         boolean tableExists = Boolean.TRUE.equals(options.getTableExists());
         List<Excel2MysqlModel> tableExcel2MysqlModelList = options.getTableExcel2MysqlModelList();
-
         if (!tableExists) {
             //不存在表时获取创表sql
             String createSql = Excel2MysqlHelper.getCreateSql(tableName, engine, tableExcel2MysqlModelList);
@@ -165,8 +164,6 @@ public class TableUpdateAutoModeSupport extends AbstractTableAutoModeSupport {
                 });
                 MAIN_LOG.info("database {} update table `{}` end", database, tableName);
             }
-
-
         }
     }
 

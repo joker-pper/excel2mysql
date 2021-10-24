@@ -9,21 +9,25 @@ import java.util.Map;
 
 public class TableAutoModeSupportFactory {
 
-    private static final Map<AutoModeEnum, AbstractTableAutoModeSupport> CACHE_MAP = new HashMap<>(8);
+    private static final Map<AutoModeEnum, TableAutoModeSupport> CACHE_MAP = new HashMap<>(8);
 
     static {
         initInstance();
     }
 
-    public static AbstractTableAutoModeSupport getTableAutoModeSupport(AutoModeEnum autoMode) {
-        AbstractTableAutoModeSupport tableAutoModeSupport = CACHE_MAP.get(autoMode);
+    private TableAutoModeSupportFactory() {
+
+    }
+
+    public static TableAutoModeSupport getTableAutoModeSupport(AutoModeEnum autoMode) {
+        TableAutoModeSupport tableAutoModeSupport = CACHE_MAP.get(autoMode);
         if (tableAutoModeSupport == null) {
             throw new UnsupportedOperationException("NOT SUPPORT auto mode: " + autoMode.getName());
         }
         return tableAutoModeSupport;
     }
 
-    private static void registerTableAutoModeSupport(AbstractTableAutoModeSupport tableAutoModeSupport) {
+    private static void registerTableAutoModeSupport(TableAutoModeSupport tableAutoModeSupport) {
         AutoModeEnum autoMode = tableAutoModeSupport.autoMode();
         if (CACHE_MAP.containsKey(autoMode)) {
             throw new RuntimeException(String.format("auto mode '%s' has already registered support instance", autoMode.getName()));

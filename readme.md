@@ -7,7 +7,7 @@
 + 通过数据源及excel文件导入mysql database进行生成、更新表(支持create/update)
 + 支持xls xlsx
 + 支持创建表时指定存储引擎,默认InnoDB
-+ 可跳过检查table schema及支持过滤table
++ 可跳过检查table schema及支持简单过滤table(支持正则)
 + 创建表支持PK(包含复合主键)、UK索引(单列)、PK&UK(既是主键又是唯一键)
 + 更新表支持PK(包含复合主键)、增加UK索引(单列)、PK&UK、新增/移除/变更列
 + 更新表存在配置索引进行处理时一般只增加不删除(除非PK变更,注:列移除会影响索引)    
